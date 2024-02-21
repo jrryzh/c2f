@@ -27,9 +27,6 @@ class C2F_Seg(nn.Module):
         self.iteration = 0
         self.sample_iter = 0
         self.name = config.model_type
-        # load g model for mask
-        self.g_config = Config(os.path.join(g_path, 'vqgan_{}.yml'.format(config.dataset)))
-        self.g_path = os.path.join(g_path, self.g_config.model_type)
 
         self.root_path = config.path
         self.transformer_path = os.path.join(config.path, self.name)
@@ -40,11 +37,8 @@ class C2F_Seg(nn.Module):
         self.eps = 1e-6
         self.train_sample_iters = config.train_sample_iters
         
-        self.g_model = VQModel(self.g_config).to(config.device)
         self.img_encoder = Resnet_Encoder().to(config.device)
         self.refine_module = Refine_Module().to(config.device)
-        self.transformer = MaskedTransformer(config).to(config.device)
-        self.g_model.eval()
 
         self.refine_criterion = nn.BCELoss()
         self.criterion = CrossEntropyLoss(num_classes=config.vocab_size+1, device=config.device)
@@ -61,27 +55,11 @@ class C2F_Seg(nn.Module):
                                                       reduction=reduction).to(config.device)
         else:
             self.perceptual_loss = None
-    
-        if config.init_gpt_with_vqvae:
-            self.transformer.z_emb.weight = self.g_model.quantize.embedding.weight
-
-        if logger is not None:
-            logger.info('Gen Parameters:{}'.format(torch_show_all_params(self.g_model)))
-            logger.info('Transformer Parameters:{}'.format(torch_show_all_params(self.transformer)))
-        else:
-            print('Gen Parameters:{}'.format(torch_show_all_params(self.g_model)))
-            print('Transformer Parameters:{}'.format(torch_show_all_params(self.transformer)))
 
         # loss
-        no_decay = ['bias', 'ln1.bias', 'ln1.weight', 'ln2.bias', 'ln2.weight']
-        param_optimizer = self.transformer.named_parameters()
         param_optimizer_encoder = self.img_encoder.named_parameters()
         param_optimizer_refine= self.refine_module.named_parameters()
         optimizer_parameters = [
-            {'params': [p for n, p in param_optimizer if not any([nd in n for nd in no_decay])],
-            'weight_decay': config.weight_decay},
-            {'params': [p for n, p in param_optimizer if any([nd in n for nd in no_decay])],
-            'weight_decay': 0.0},
             {'params': [p for n, p in param_optimizer_encoder], 'weight_decay': config.weight_decay},
             {'params': [p for n, p in param_optimizer_refine], 'weight_decay': config.weight_decay},
         ]
@@ -91,8 +69,11 @@ class C2F_Seg(nn.Module):
         self.sche = get_linear_schedule_with_warmup(self.opt, num_warmup_steps=config.warmup_iters,
                                                     num_training_steps=config.max_iters)
 
-        # self.rank = dist.get_rank()
-        self.rank = 0
+        try:
+            self.rank = dist.get_rank()
+        except:
+            self.rank = 0
+            
         self.gamma = self.gamma_func(mode=config.gamma_mode)
         self.mask_token_idx = config.vocab_size
         self.choice_temperature = 4.5
@@ -124,35 +105,9 @@ class C2F_Seg(nn.Module):
 
     def get_losses(self, meta):
         self.iteration += 1
-        z_loss = 0
         img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
-        _, src_indices = self.encode_to_z(meta['vm_crop'])
-        _, tgt_indices = self.encode_to_z(meta['fm_crop'])
-        bhwc = (_.shape[0], _.shape[2], _.shape[3], _.shape[1])
-        r = np.maximum(self.gamma(np.random.uniform()), self.config.min_mask_rate)
-        r = math.floor(r * tgt_indices.shape[1])
-        sample = torch.rand(tgt_indices.shape, device=tgt_indices.device).topk(r, dim=1).indices
-        random_mask = torch.zeros(tgt_indices.shape, dtype=torch.bool, device=tgt_indices.device)
-        random_mask.scatter_(dim=1, index=sample, value=True) # [B, L]
-        # concat mask
-        mask = random_mask
-        masked_indices = self.mask_token_idx * torch.ones_like(tgt_indices, device=tgt_indices.device) # [B, L]
-        z_indices = (~mask) * tgt_indices + mask * masked_indices # [B, L]
 
-        logits_z = self.transformer(img_feat[-1], src_indices, z_indices, mask=None)        
-        target = tgt_indices
-        z_loss = self.criterion(logits_z.view(-1, logits_z.size(-1)), target.view(-1))
-
-        with torch.no_grad():
-            logits_z = logits_z[..., :-1]
-            logits_z = self.top_k_logits(logits_z, k=5)
-            probs = F.softmax(logits_z, dim=-1)
-            seq_ids = torch.distributions.categorical.Categorical(probs=probs).sample() # [B, L]
-            quant_z = self.g_model.quantize.get_codebook_entry(seq_ids.reshape(-1), shape=bhwc)
-            pred_fm_crop = self.g_model.decode(quant_z)
-            pred_fm_crop = pred_fm_crop.mean(dim=1, keepdim=True)
-            pred_fm_crop = torch.clamp(pred_fm_crop, min=0, max=1)
-
+        pred_fm_crop = meta["vm_crop_gt"]
         pred_vm_crop, pred_fm_crop = self.refine_module(img_feat, pred_fm_crop.detach())
         pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
         pred_vm_crop = torch.sigmoid(pred_vm_crop)
@@ -164,11 +119,10 @@ class C2F_Seg(nn.Module):
         loss_fm = self.refine_criterion(pred_fm_crop, meta['fm_crop'])
         # pred_fm_crop = (pred_fm_crop>=0.5).to(torch.float32)
         logs = [
-            ("z_loss", z_loss.item()),
             ("loss_vm", loss_vm.item()),
             ("loss_fm", loss_fm.item()),
         ]
-        return z_loss, loss_vm+loss_fm, logs
+        return loss_vm+loss_fm, logs
     
     def align_raw_size(self, full_mask, obj_position, vm_pad, meta):
         vm_np_crop = meta["vm_no_crop"].squeeze()
@@ -334,7 +288,6 @@ class C2F_Seg(nn.Module):
                 print('Rank {} is loading {} Transformer...'.format(self.rank, transformer_path))
                 data = torch.load(transformer_path, map_location="cpu")
                 
-                torch_init_model(self.transformer, transformer_path, 'model')
                 torch_init_model(self.img_encoder, transformer_path, 'img_encoder')
                 torch_init_model(self.refine_module, transformer_path, 'refine')
 
@@ -350,17 +303,6 @@ class C2F_Seg(nn.Module):
                 print(transformer_path, 'not Found')
                 raise FileNotFoundError
 
-    def restore_from_stage1(self, prefix=None):
-        if prefix is not None:
-            g_path = self.g_path + prefix + '.pth'
-        else:
-            g_path = self.g_path + '_last.pth'
-        if os.path.exists(g_path):
-            print('Rank {} is loading {} G Mask ...'.format(self.rank, g_path))
-            torch_init_model(self.g_model, g_path, 'g_model')
-        else:
-            print(g_path, 'not Found')
-            raise FileNotFoundError
     
     def save(self, prefix=None):
         if prefix is not None:

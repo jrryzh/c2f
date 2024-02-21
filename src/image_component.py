@@ -9,6 +9,8 @@ from torchvision.models import resnet18, resnet50
 
 logger = logging.getLogger(__name__)
 
+# 修改： 增加depth到image
+
 class base_resnet(nn.Module):
     def __init__(self):
         super(base_resnet, self).__init__()
