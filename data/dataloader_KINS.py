@@ -558,7 +558,8 @@ class KINS_Aisformer_VRSP_Intersection(torch.utils.data.Dataset):
         img_path = os.path.join(self.img_root_path, img_name)
         # img_path = os.path.join(self.img_root_path, str(image_id).zfill(6)+ ".png")
         img = Image.open(img_path)
-        img = img.resize((width,height), Image.ANTIALIAS)
+        # img = img.resize((width,height), Image.ANTIALIAS)
+        img = img.resize((width,height), Image.LANCZOS)
         img = np.array(img)
         
         vm_no_crop = mask_utils.decode([segmentation]).astype(bool)

@@ -19,7 +19,7 @@ Image_W: 256
 Image_H: 256
 patch_W: 256
 patch_H: 256
-root_path: /home/ubuntu/data/COCOA
+root_path: /cpfs/2926428ee2463e44/user/zjy/data/COCOA
 
 # =========================== Model Settings ===========================
 init_gpt_with_vqvae: False 

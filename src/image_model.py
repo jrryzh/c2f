@@ -91,7 +91,8 @@ class C2F_Seg(nn.Module):
         self.sche = get_linear_schedule_with_warmup(self.opt, num_warmup_steps=config.warmup_iters,
                                                     num_training_steps=config.max_iters)
 
-        self.rank = dist.get_rank()
+        # self.rank = dist.get_rank()
+        self.rank = 0
         self.gamma = self.gamma_func(mode=config.gamma_mode)
         self.mask_token_idx = config.vocab_size
         self.choice_temperature = 4.5
@@ -243,51 +244,9 @@ class C2F_Seg(nn.Module):
         self.sample_iter += 1
 
         img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
-
-        _, src_indices = self.encode_to_z(meta['vm_crop'])
-        # _, tgt_indices = self.encode_to_z(meta['fm_crop'])
-        bhwc = (_.shape[0], _.shape[2], _.shape[3], _.shape[1])
-
-        masked_indices = self.mask_token_idx * torch.ones_like(src_indices, device=src_indices.device) # [B, L]
-        unknown_number_in_the_beginning = torch.sum(masked_indices == self.mask_token_idx, dim=-1) # [B]
-
-        gamma = self.gamma_func("cosine")
-        cur_ids = masked_indices # [B, L]
-        seq_out = []
-        mask_out = []
-
-        for t in range(start_iter, T):
-            logits = self.transformer(img_feat[-1], src_indices, cur_ids, mask=None) # [B, L, N]
-            logits = logits[..., :-1]
-            logits = self.top_k_logits(logits, k=3)
-            probs = F.softmax(logits, dim=-1)  # convert logits into probs [B, 256, vocab_size+1]
-            sampled_ids = torch.distributions.categorical.Categorical(probs=probs).sample() # [B, L]
-
-            unknown_map = (cur_ids == self.mask_token_idx)  # which tokens need to be sampled -> bool [B, 256]
-            sampled_ids = torch.where(unknown_map, sampled_ids, cur_ids)  # replace all -1 with their samples and leave the others untouched [B, 256]
-            seq_out.append(sampled_ids)
-            mask_out.append(1. * unknown_map)
-
-            ratio = 1. * (t + 1) / T  # just a percentage e.g. 1 / 12
-            mask_ratio = gamma(ratio)
-            selected_probs = probs.gather(dim=-1, index=sampled_ids.unsqueeze(-1)).squeeze(-1)
-
-            selected_probs = torch.where(unknown_map, selected_probs, torch.Tensor([np.inf]).to(logits.device))  # ignore tokens which are already sampled [B, 256]
-            
-            mask_len = torch.unsqueeze(torch.floor(unknown_number_in_the_beginning * mask_ratio), 1)  # floor(256 * 0.99) = 254 --> [254, 254, 254, 254, ....] (B x 1)
-            mask_len = torch.maximum(torch.ones_like(mask_len), torch.minimum(torch.sum(unknown_map, dim=-1, keepdim=True) - 1, mask_len))
-
-            # Adds noise for randomness
-            masking = self.mask_by_random_topk(mask_len, selected_probs, temperature=self.choice_temperature * (1. - ratio))
-            # Masks tokens with lower confidence.
-            cur_ids = torch.where(masking, self.mask_token_idx, sampled_ids) # [B, L]
-
-        seq_ids = torch.stack(seq_out, dim=1) # [B, T, L]
-        quant_z = self.g_model.quantize.get_codebook_entry(seq_ids[:,-1,:].reshape(-1), shape=bhwc)
-        pred_fm_crop = self.g_model.decode(quant_z)
-        pred_fm_crop = pred_fm_crop.mean(dim=1, keepdim=True)
-        pred_fm_crop_old = torch.clamp(pred_fm_crop, min=0, max=1)
-
+        
+        # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
+        pred_fm_crop_old = meta["vm_crop_gt"]
         pred_vm_crop, pred_fm_crop = self.refine_module(img_feat, pred_fm_crop_old)
 
         pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
@@ -304,7 +263,7 @@ class C2F_Seg(nn.Module):
         pred_fm = self.align_raw_size(pred_fm_crop, meta['obj_position'], meta["vm_pad"], meta)
         
         # visualization
-        self.visualize(pred_vm, pred_fm, meta, mode, iter)
+        # self.visualize(pred_vm, pred_fm, meta, mode, iter)
 
         loss_eval = self.loss_and_evaluation(pred_fm, meta, iter, mode, pred_vm=pred_vm)
         loss_eval["loss_fm"] = loss_fm
@@ -313,6 +272,7 @@ class C2F_Seg(nn.Module):
 
 
     def visualize(self, pred_vm, pred_fm, meta, mode, iteration):
+        # import ipdb; ipdb.set_trace()
         pred_fm = pred_fm.squeeze()
         pred_vm = pred_vm.squeeze()
         gt_vm = meta["vm_no_crop"].squeeze()
