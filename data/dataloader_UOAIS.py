@@ -19,18 +19,18 @@ class UOAIS_VQ_mask(torch.utils.data.Dataset):
 
         root_path = config.root_path
         # temporal
-        train_img_path = "/home/zhangjinyu/data/UOAIS-Sim/train/bin/color"
-        test_img_path = "/home/zhangjinyu/data/UOAIS-Sim/val/bin/color"
+        train_img_path = "/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/train/bin/color"
+        test_img_path = "/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/val/bin/color"
         self.image_list = []
         if mode=="train":
             # train_label = cvb.load(os.path.join(root_path,"COCOA_annotations_detectron/COCO_amodal_train2014_with_classes.json"))
-            train_label = cvb.load("/home/zhangjinyu/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_train.json")
+            train_label = cvb.load("/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_train.json")
             self.anns_dict_list = train_label["annotations"]
             self.img_dict_list = train_label["images"]
             # flist = config.data_flist.train
         elif mode=="test":
             # val_label = cvb.load(os.path.join(root_path,"COCOA_annotations_detectron/COCO_amodal_val2014_with_classes.json"))
-            val_label = cvb.load("/home/zhangjinyu/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_val.json")
+            val_label = cvb.load("/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_val.json")
             self.anns_dict_list = val_label["annotations"]
             self.img_dict_list = val_label["images"]
             # flist = config.data_flist.test
@@ -55,9 +55,9 @@ class UOAIS_VQ_mask(torch.utils.data.Dataset):
             self.enlarge_coef = random.uniform(1.5, 3)
         
         if self.mode=="train":
-            img_root_path = "/home/zhangjinyu/data/UOAIS-Sim/train/"
+            img_root_path = "/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/train/"
         else:
-            img_root_path = "/home/zhangjinyu/data/UOAIS-Sim/val/"
+            img_root_path = "/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/val/"
         
         img = cv2.imread(os.path.join(img_root_path, self.img_dict_list[index]["file_name"]), cv2.IMREAD_COLOR)
         img = img[...,::-1]
@@ -156,17 +156,17 @@ class Fusion_UOAIS(torch.utils.data.Dataset):
         # self.data_info = pickle.load(open(os.path.join("/home/ubuntu/data/Fusion_cocoa","retrain_{}.pkl".format(self.mode)),"rb"))
         # self.label_info = np.genfromtxt(os.path.join("/home/ubuntu/data/Fusion_cocoa", "{}_lable.txt".format(self.mode)), dtype=np.str, encoding='utf-8')
         if mode=="train":
-            train_label = cvb.load("/home/zhangjinyu/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_train.json")
+            train_label = cvb.load("/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_train.json")
             self.anns_dict_list = train_label["annotations"]
             self.img_dict_list = train_label["images"]
         elif mode=="test":
-            val_label = cvb.load("/home/zhangjinyu/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_val.json")
+            val_label = cvb.load("/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_val.json")
             self.anns_dict_list = val_label["annotations"]
             self.img_dict_list = val_label["images"]
         if self.mode=="train":
-            self.img_root_path = "/home/zhangjinyu/data/UOAIS-Sim/train/"
+            self.img_root_path = "/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/train/"
         elif self.mode=="test":
-            self.img_root_path = "/home/zhangjinyu/data/UOAIS-Sim/val/"
+            self.img_root_path = "/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/val/"
 
         self.uoais_vm_annotation_list = cvb.load("/home/zhangjinyu/uoais_new/predvms/pred_vis_masks_5k.json")
         self.dtype = torch.float32
@@ -634,7 +634,7 @@ class VRSP_COCOA(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
 
-    train_label = cvb.load("/home/zhangjinyu/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_train.json")
+    train_label = cvb.load("/cpfs/2926428ee2463e44/user/zjy/data/UOAIS-Sim/annotations/coco_anns_uoais_sim_train.json")
     # import pdb; pdb.set_trace()
     anns_dict_list = train_label["annotations"]
     # img_dict_list = train_label["images"]
