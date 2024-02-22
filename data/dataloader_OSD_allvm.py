@@ -20,7 +20,7 @@ class Fusion_OSD_All_VM(torch.utils.data.Dataset):
         self.img_root_path = "/home/zhangjinyu/uoais_new"
 
         # self.uoais_vm_annotation_list = cvb.load("/home/zhangjinyu/uoais_new/predvms/pred_vis_masks_5k.json")
-        self.all_vm_annotation_list = cvb.load("/home/zhangjinyu/uoais/osd_vms/all_vis_masks.json")
+        self.all_vm_annotation_list = cvb.load("/cpfs/2926428ee2463e44/user/zjy/data/OSD_vms/osd_all_vismask.json")
         self.dtype = torch.float32
         self.enlarge_coef = 2
         self.patch_h = 256

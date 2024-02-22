@@ -90,7 +90,7 @@ if __name__ == '__main__':
         dataset=test_dataset,
         sampler=test_sampler,
         batch_size=config.batch_size,
-        num_workers=8,
+        num_workers=config.test_num_workers,
         drop_last=False
     )
 

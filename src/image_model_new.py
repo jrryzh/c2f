@@ -301,6 +301,8 @@ class C2F_Seg_New(nn.Module):
                 data = torch.load(transformer_path, map_location="cpu")
                 
                 torch_init_model(self.img_encoder, transformer_path, 'img_encoder')
+                torch_init_model(self.depth_encoder, transformer_path, 'depth_encoder')
+                torch_init_model(self.rgbd_fusion_conv, transformer_path, 'fusion')
                 torch_init_model(self.refine_module, transformer_path, 'refine')
 
                 if self.config.restore:
@@ -327,7 +329,9 @@ class C2F_Seg_New(nn.Module):
             'iteration': self.iteration,
             'sample_iter': self.sample_iter,
             'img_encoder': self.img_encoder.state_dict(),
+            'depth_encoder': self.depth_encoder.state_dict(),
             'refine': self.refine_module.state_dict(),
+            'fusion': self.rgbd_fusion_conv.state_dict(),
             'opt': self.opt.state_dict(),
         }, save_path)
 

@@ -17,7 +17,6 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42) 
     parser.add_argument('--path', type=str, required=True, help='model checkpoints path')
     parser.add_argument('--check_point_path', type=str, default="../check_points")
-    parser.add_argument('--vq_path', type=str, required=True, default='KINS_vqgan')
     parser.add_argument('--dataset', type=str, default="MOViD_A", help="select dataset")
     parser.add_argument('--data_type', type=str, default="image", help="select image or video model")
     parser.add_argument('--batch', type=int, default=1)
@@ -30,7 +29,6 @@ if __name__ == '__main__':
         from src.video_model import C2F_Seg
 
     args.path = os.path.join(args.check_point_path, args.path)
-    vq_model_path = os.path.join(args.check_point_path, args.vq_path)
     os.makedirs(args.path, exist_ok=True)
 
     config_path = os.path.join(args.path, 'c2f_seg_{}.yml'.format(args.dataset))
@@ -62,16 +60,14 @@ if __name__ == '__main__':
     test_loader = DataLoader(
         dataset=test_dataset,
         batch_size=config.batch_size,
-        num_workers=16,
+        num_workers=config.test_num_workers,
         drop_last=False
     )
 
     sample_iterator = test_dataset.create_iterator(config.sample_size)
 
-    model = C2F_Seg(config, vq_model_path, mode='test', logger=logger)
+    model = C2F_Seg(config, mode='test', logger=logger)
     model.load(is_test=True, prefix=config.stage2_iteration)
-    model.restore_from_stage1(prefix=config.stage1_iteration)
-
     model = model.to(config.device)
 
     iter = 0
