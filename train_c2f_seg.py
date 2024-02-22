@@ -29,7 +29,6 @@ if __name__ == '__main__':
     # path
     parser.add_argument('--path', type=str, required=True, help='model checkpoints path')
     parser.add_argument('--check_point_path', type=str, default="../check_points", )
-    parser.add_argument('--vq_path', type=str, required=True, default='KINS_vqgan')
     # training
     parser.add_argument('--Image_W', type=int, default=256)
     parser.add_argument('--Image_H', type=int, default=256)
@@ -54,7 +53,6 @@ if __name__ == '__main__':
     rank = dist.get_rank()
 
     args.path = os.path.join(args.check_point_path, args.path)
-    vq_model_path = os.path.join(args.check_point_path, args.vq_path)
     os.makedirs(args.path, exist_ok=True)
 
     config_path = os.path.join(args.path, 'c2f_seg_{}.yml'.format(args.dataset))
@@ -98,9 +96,8 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(config.seed)
     world_size = dist.get_world_size()
     
-    model = C2F_Seg(config, vq_model_path, mode='train', logger=logger)
+    model = C2F_Seg(config, mode='train', logger=logger)
     model.load(is_test=False, prefix = config.stage2_iteration)
-    model.restore_from_stage1(prefix = config.stage1_iteration)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank])
 
     # load dataset
@@ -154,15 +151,13 @@ if __name__ == '__main__':
             counts = items['counts'].squeeze().bool().sum()
             if counts==0:
                 continue
-            z_loss, r_loss, logs = model.module.get_losses(items)
-            model.module.backward(z_loss+r_loss)
-            z_loss = get_avg_loss(z_loss)
+            r_loss, logs = model.module.get_losses(items)
+            model.module.backward(r_loss)
             r_loss = get_avg_loss(r_loss)
             torch.cuda.empty_cache()
             iteration = model.module.iteration
             sample_iter = model.module.sample_iter
             if rank==0:
-                writer.add_scalar("loss/z_loss", z_loss, model.module.iteration)
                 writer.add_scalar("loss/r_loss", r_loss, model.module.iteration)
                 logs = [("epoch", epoch), ("iter", iteration), ('lr', model.module.sche.get_lr()[0])] + logs
                 progbar.add(config.batch_size, values=logs)
