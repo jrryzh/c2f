@@ -9,7 +9,19 @@ from torchvision.models import resnet18, resnet50
 
 logger = logging.getLogger(__name__)
 
-# 修改： 增加depth到image
+# 修改： 增加depth到image和fusion_conv
+class RGBDFusionConv(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.fusion_conv = nn.Conv2d(in_channels * 2, in_channels, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, rgb_features, depth_features):
+        # 假设rgb_features和depth_features都是最终的特征图，且它们的维度相同
+        # 在特征维度上进行拼接
+        fused_features = torch.cat([rgb_features, depth_features], dim=1)
+        # 通过1x1卷积进行特征融合
+        fused_features = self.fusion_conv(fused_features)
+        return fused_features
 
 class base_resnet(nn.Module):
     def __init__(self):
