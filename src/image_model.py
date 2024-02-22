@@ -21,7 +21,7 @@ from utils.loss import CrossEntropyLoss
 
 
 class C2F_Seg(nn.Module):
-    def __init__(self, config, g_path, mode, logger=None, save_eval_dict={}):
+    def __init__(self, config, mode, logger=None, save_eval_dict={}):
         super(C2F_Seg, self).__init__()
         self.config = config
         self.iteration = 0
@@ -314,7 +314,6 @@ class C2F_Seg(nn.Module):
         torch.save({
             'iteration': self.iteration,
             'sample_iter': self.sample_iter,
-            'model': self.transformer.state_dict(),
             'img_encoder': self.img_encoder.state_dict(),
             'refine': self.refine_module.state_dict(),
             'opt': self.opt.state_dict(),

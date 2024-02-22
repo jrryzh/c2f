@@ -2,6 +2,7 @@ from data.dataloader_Fishbowl import FishBowl
 from data.dataloader_MOViD_A import MOViD_A
 from data.dataloader_KINS import Kins_Fusion_dataset, KINS_Aisformer_VRSP_Intersection
 from data.dataloader_COCOA import COCOA_Fusion_dataset, COCOA_VRSP
+from data.dataloader_UOAIS import UOAIS_VQ_mask, Fusion_UOAIS
 
 def load_dataset(config, args, mode):
     if mode=="train":
@@ -17,6 +18,9 @@ def load_dataset(config, args, mode):
         elif args.dataset=="MOViD_A":
             train_dataset = MOViD_A(config, mode='train')
             test_dataset = MOViD_A(config, mode='test')
+        elif args.dataset=="UOAIS":
+            train_dataset = Fusion_UOAIS(config, mode='train')
+            test_dataset = Fusion_UOAIS(config, mode='test')
         return train_dataset, test_dataset 
     else:
         if args.dataset=="KINS":
@@ -27,4 +31,6 @@ def load_dataset(config, args, mode):
             test_dataset = FishBowl(config, mode='test')
         elif args.dataset=="MOViD_A":
             test_dataset = MOViD_A(config, mode='test')
+        elif args.dataset=="UOAIS":
+            test_dataset = Fusion_UOAIS(config, mode='test')
         return test_dataset

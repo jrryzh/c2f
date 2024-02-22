@@ -19,7 +19,6 @@ if __name__ == '__main__':
     # path
     parser.add_argument('--path', type=str, required=True, help='model checkpoints path')
     parser.add_argument('--check_point_path', type=str, default="../check_points", )
-    parser.add_argument('--vq_path', type=str, required=True, default='KINS_vqgan')
     # training
     parser.add_argument('--Image_W', type=int, default=256)
     parser.add_argument('--Image_H', type=int, default=256)
@@ -41,7 +40,6 @@ if __name__ == '__main__':
     torch.cuda.set_device(0)
 
     args.path = os.path.join(args.check_point_path, args.path)
-    vq_model_path = os.path.join(args.check_point_path, args.vq_path)
     os.makedirs(args.path, exist_ok=True)
 
     config_path = os.path.join(args.path, 'c2f_seg_{}.yml'.format(args.dataset))
@@ -84,7 +82,7 @@ if __name__ == '__main__':
     random.seed(config.seed)
     torch.cuda.manual_seed_all(config.seed)
     
-    model = C2F_Seg(config, vq_model_path, mode='train', logger=logger)
+    model = C2F_Seg(config, mode='train', logger=logger)
     model.load(is_test=False, prefix = config.stage2_iteration)
     model.to(config.device)
     

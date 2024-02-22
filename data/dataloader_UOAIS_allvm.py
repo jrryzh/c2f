@@ -9,29 +9,18 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import pycocotools.mask as mask_utils
-import matplotlib.pyplot as plt
-import glob
 
-def get_bbox(mask):
-    ys, xs = np.where(mask)
-    if len(xs) == 0 or len(ys) == 0:
-        return [0, 0, 0, 0]
-    x_min, x_max = xs.min(), xs.max()
-    y_min, y_max = ys.min(), ys.max()
-    return [int(x_min), int(y_min), int(x_max - x_min), int(y_max - y_min)]
 
-class Fusion_OSD(torch.utils.data.Dataset):
+class Fusion_UOAIS_All_VM(torch.utils.data.Dataset):
     def __init__(self, config, mode):
-        super(Fusion_OSD, self).__init__()
+        super(Fusion_UOAIS_All_VM, self).__init__()
         self.config = config
         self.mode = mode
-        self.dataset_path = "/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/"
-        self.rgb_paths = sorted(glob.glob("{}/image_color/*.png".format(self.dataset_path)))
-        # can get occluded mask from annotation
-        self.anno_paths = sorted(glob.glob("{}/annotation/*.png".format(self.dataset_path)))
-        self.amodal_anno_paths = sorted(glob.glob("{}/amodal_annotation/*.png".format(self.dataset_path)))
-        self.occlusion_anno_paths = sorted(glob.glob("{}/occlusion_annotation/*.png".format(self.dataset_path)))
 
+        self.img_root_path = "/home/zhangjinyu/data/UOAIS-Sim/val/"
+
+        # self.uoais_vm_annotation_list = cvb.load("/home/zhangjinyu/uoais_new/predvms/pred_vis_masks_5k.json")
+        self.uoais_all_vm_annotation_list = cvb.load("/home/zhangjinyu/uoais_new/predvms/final/all_vis_masks_test.json")
         self.dtype = torch.float32
         self.enlarge_coef = 2
         self.patch_h = 256
@@ -40,49 +29,46 @@ class Fusion_OSD(torch.utils.data.Dataset):
 
         
     def __len__(self):
-        return len(self.amodal_anno_paths)
-
+        # return len(self.anns_dict_list)
+        # return len(self.uoais_vm_annotation_list)
+        return len(self.uoais_all_vm_annotation_list)
 
     def __getitem__(self, index):
         return self.load_item(index)
         
     def load_item(self, index):
-        # 获得anno并进行处理
-        anno_file = self.amodal_anno_paths[index]
-        amodal_anno = cv2.imread(anno_file)[...,0]
-        img_name = anno_file.split('/')[-1].split('_')[0] + '.png'
-        anno_id = int(anno_file.split('/')[-1].split('_')[1].strip('.png'))
-
-        # 获得img
-        img = cv2.imread(os.path.join("/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/image_color", img_name))
         # anno_id, img_path = self.label_info[index].split(",")
+        # import pdb;pdb.set_trace()
+        img = cv2.imread(os.path.join(self.img_root_path, self.uoais_all_vm_annotation_list[index]["file_name"]), cv2.IMREAD_COLOR)
         height, width, _ = img.shape
 
-        # ann = self.anns_dict_list[index]
-        if "learn" in img_name:
-            img_id = img_name[:-4].strip("learn")
-        else:
-            img_id = img_name[:-4].strip("test")
-        img_id = int(img_id)
-        # category_id = ann["category_id"]
+        ann = self.uoais_all_vm_annotation_list[index]
+        anno_id = ann["id"]
+        img_id = ann["image_id"]
+        category_id = 1
+        score = ann["score"]
 
-        full_mask = amodal_anno>0
+        # full_mask = ann["segmentation"]
         # fm_no_crop = mask_utils.decode(full_mask)[...,np.newaxis]
-        fm_no_crop = full_mask
+        #
+        # fm_no_crop_gt = fm_no_crop
 
-        visible_mask = cv2.imread(os.path.join("/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/annotation", img_name))[...,0] == anno_id
-        # vm_no_crop = mask_utils.decode(visible_mask)[...,np.newaxis]
-        vm_no_crop = visible_mask
+        visible_mask = ann["visible_mask"]
+        vm_no_crop = mask_utils.decode(visible_mask)[...,np.newaxis]
+
+        # vm_no_crop_gt = vm_no_crop
 
         if np.sum(vm_no_crop)==0:
             counts = np.array([0])
-            print("DEBUG: all zeors: ",img_name)
+            print("DEBUG: zero vm!!! INDEX: %d" % index)
             return dict()
         else:
             counts = np.array([1])
-            y_min, x_min, w, h = get_bbox(full_mask)
-            y_max, x_max = y_min + w, x_min + h
-            y_min, x_min, y_max, x_max = int(y_min), int(x_min), int(y_max), int(x_max) 
+            # y_min, x_min, w, h = ann["bbox"]
+            # y_max, x_max = y_min + w, x_min + h
+            # y_min, x_min, y_max, x_max = int(y_min), int(x_min), int(y_max), int(x_max)
+            y_min, x_min, y_max, x_max = ann["bbox"]
+            y_min, x_min, y_max, x_max = int(y_min), int(x_min), int(y_max), int(x_max)
 
             x_center = (x_min + x_max) // 2
             y_center = (y_min + y_max) // 2
@@ -93,8 +79,8 @@ class Fusion_OSD(torch.utils.data.Dataset):
             y_min = max(0, y_center - y_len // 2)
             y_max = min(width, y_center + y_len // 2)
             
-            fm_crop = fm_no_crop[x_min:x_max+1, y_min:y_max+1].astype(bool)
-            vm_crop = vm_no_crop[x_min:x_max+1, y_min:y_max+1].astype(bool)
+            # fm_crop = fm_no_crop[x_min:x_max+1, y_min:y_max+1, 0].astype(bool)
+            vm_crop = vm_no_crop[x_min:x_max+1, y_min:y_max+1, 0].astype(bool)
             img_crop = img[x_min:x_max+1, y_min:y_max+1]
 
             h, w = vm_crop.shape[:2]
@@ -110,11 +96,11 @@ class Fusion_OSD(torch.utils.data.Dataset):
             img_ = np.pad(img_, to_pad)[:self.patch_h, :self.patch_w, :3]
             img_crop = img_
 
-            m = transform.rescale(fm_crop, (self.patch_h/h, self.patch_w/w))
-            cur_h, cur_w = m.shape[:2]
-            to_pad = ((0, max(self.patch_h-cur_h, 0)), (0, max(self.patch_w-cur_w, 0)))
-            m = np.pad(m, to_pad)[:self.patch_h, :self.patch_w]    
-            fm_crop = m[np.newaxis, ...]
+            # m = transform.rescale(fm_crop, (self.patch_h/h, self.patch_w/w))
+            # cur_h, cur_w = m.shape[:2]
+            # to_pad = ((0, max(self.patch_h-cur_h, 0)), (0, max(self.patch_w-cur_w, 0)))
+            # m = np.pad(m, to_pad)[:self.patch_h, :self.patch_w]
+            # fm_crop = m[np.newaxis, ...]
 
             obj_position = np.array([x_min, x_max, y_min, y_max])
             vm_pad = np.array([max(self.patch_h-cur_h, 0), max(self.patch_w-cur_w, 0)])
@@ -124,7 +110,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
             # vm_no_crop = np.pad(vm_no_crop, full_pad)[:375, :1242]
             # fm_no_crop = np.pad(fm_no_crop, full_pad)[:375, :1242]
             vm_no_crop = vm_no_crop[np.newaxis, ...]
-            fm_no_crop = fm_no_crop[np.newaxis, ...]
+            # fm_no_crop = fm_no_crop[np.newaxis, ...]
 
             # loss_mask = fm_no_crop-vm_no_crop
             # loss_mask[loss_mask==255]=0
@@ -138,8 +124,8 @@ class Fusion_OSD(torch.utils.data.Dataset):
             vm_pad = torch.from_numpy(vm_pad).to(self.dtype).to(self.device)
             vm_scale = torch.from_numpy(vm_scale).to(self.dtype).to(self.device)
 
-            fm_crop = torch.from_numpy(fm_crop).to(self.dtype).to(self.device)
-            fm_no_crop = torch.from_numpy(np.array(fm_no_crop)).to(self.dtype).to(self.device)
+            # fm_crop = torch.from_numpy(fm_crop).to(self.dtype).to(self.device)
+            # fm_no_crop = torch.from_numpy(np.array(fm_no_crop)).to(self.dtype).to(self.device)
             vm_crop = torch.from_numpy(vm_crop).to(self.dtype).to(self.device)
             vm_crop_aug = torch.from_numpy(vm_crop_aug).to(self.dtype).to(self.device)
             img_crop = torch.from_numpy(img_crop).to(self.dtype).to(self.device)
@@ -150,35 +136,16 @@ class Fusion_OSD(torch.utils.data.Dataset):
         
             img_id = torch.from_numpy(np.array(img_id)).to(self.dtype).to(self.device)
             anno_id = torch.from_numpy(np.array(anno_id)).to(self.dtype).to(self.device)
-            # category_id = torch.from_numpy(np.array(category_id)).to(self.dtype).to(self.device)
-            if self.mode=="train":
+            category_id = torch.from_numpy(np.array(category_id)).to(self.dtype).to(self.device)
+            if self.mode=="test":
                 meta = {
-                    # "vm_no_crop": vm_no_crop,
-                    "vm_crop": vm_crop_aug,
-                    "vm_crop_gt": vm_crop,
-                    # "fm_no_crop": fm_no_crop,
-                    "fm_crop": fm_crop,
-                    "img_crop": img_crop,
-                    # "loss_mask": loss_mask,
-                    "obj_position": obj_position,
-                    "vm_pad": vm_pad,
-                    "vm_scale": vm_scale,
-                    "counts": counts,
-                    "img_id": img_id,
-                    # "anno_id": anno_id,
-                    # "category_id": category_id,
-                    # for vq
-                    # "mask_crop": fm_crop
-                    # "img_no_crop": img
-                }
-            elif self.mode=="test":
-                meta = {
+                    "score": score,
                     "vm_no_crop": vm_no_crop,
                     "vm_no_crop_gt": vm_no_crop,
                     "vm_crop": vm_crop,
                     "vm_crop_gt": vm_crop,
-                    "fm_no_crop": fm_no_crop,
-                    "fm_crop": fm_crop,
+                    # "fm_no_crop": fm_no_crop,
+                    # "fm_crop": fm_crop,
                     "img_crop": img_crop,
                     # "loss_mask": loss_mask,
                     "obj_position": obj_position,
@@ -186,12 +153,17 @@ class Fusion_OSD(torch.utils.data.Dataset):
                     "vm_scale": vm_scale,
                     "counts":counts,
                     "img_id": img_id,
-                    # "anno_id": anno_id,
-                    # "category_id": category_id,
+                    "anno_id": anno_id,
+                    "category_id": category_id,
                     # for vq
                     # "mask_crop": fm_crop
                     "img_no_crop": img,
+                    # "fm_no_crop_gt" : fm_no_crop_gt,
+                    # "vm_no_crop_gt" : vm_no_crop_gt
                 }
+            else:
+                print("Wrong")
+                exit(-1)
             return meta
         
     @staticmethod
@@ -272,6 +244,4 @@ class Fusion_OSD(torch.utils.data.Dataset):
             imgs_dict[image_id] = img['file_name']
 
         return imgs_dict, anns_dict
-
-
 
