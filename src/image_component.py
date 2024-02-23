@@ -18,10 +18,56 @@ class RGBDFusionConv(nn.Module):
     def forward(self, rgb_features, depth_features):
         # 假设rgb_features和depth_features都是最终的特征图，且它们的维度相同
         # 在特征维度上进行拼接
+        import ipdb; ipdb.set_trace()
         fused_features = torch.cat([rgb_features, depth_features], dim=1)
         # 通过1x1卷积进行特征融合
         fused_features = self.fusion_conv(fused_features)
         return fused_features
+
+class rgbd_resnet(nn.Module):
+    def __init__(self):
+        super(rgbd_resnet, self).__init__()
+        # 加载预训练的 ResNet50 模型
+        resnet50_pretrained = resnet50(pretrained=True)
+        
+        # 创建新的第一层卷积，以接受 6 通道输入
+        self.conv1 = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # 将原始第一层的权重复制到新层的前3个通道
+        self.conv1.weight.data[:, :3, :, :] = resnet50_pretrained.conv1.weight.data
+        # 初始化后3个通道的权重
+        # 这里我们简单地使用前三个通道的平均值
+        self.conv1.weight.data[:, 3:, :, :] = torch.mean(resnet50_pretrained.conv1.weight.data, dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        
+        # 使用预训练的模型的其他部分，除了原始的conv1
+        # self.bn1 = resnet50_pretrained.bn1
+        # self.relu = resnet50_pretrained.relu
+        # self.maxpool = resnet50_pretrained.maxpool
+        # self.layer1 = resnet50_pretrained.layer1
+        # self.layer2 = resnet50_pretrained.layer2
+        # self.layer3 = resnet50_pretrained.layer3
+        # self.layer4 = resnet50_pretrained.layer4
+        
+        # 调整 layer4 以改变特征图的分辨率
+        self.layer4[0].downsample[0].stride = (1, 1)
+        self.layer4[0].conv2.stride = (1, 1)
+
+    def forward(self, x):
+        features = []
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        
+        x = self.layer1(x)
+        features.append(x)
+        x = self.layer2(x)
+        features.append(x)
+        x = self.layer3(x)
+        features.append(x)
+        x = self.layer4(x)
+        features.append(x)
+        
+        return features
 
 class base_resnet(nn.Module):
     def __init__(self):
@@ -45,6 +91,16 @@ class base_resnet(nn.Module):
         x = self.model.layer4(x)
         features.append(x)
         return features
+
+class RGBD_Resnet_Encoder(nn.Module):
+    def __init__(self):
+        super(RGBD_Resnet_Encoder, self).__init__()
+        self.encoder = rgbd_resnet()
+
+    def forward(self, rgbd):
+        features = self.encoder(rgbd)
+        return features
+
 
 class Resnet_Encoder(nn.Module):
     def __init__(self):
@@ -307,4 +363,291 @@ class Refine_Module(nn.Module):
         x_am = self.out_lay_am(x_am)
 
         return x_vm, x_am
+
+# 只添加一层depth_attn_map
+class Refine_Module_RGBD_depthattnmap(nn.Module):
+    def __init__(self):
+        super(Refine_Module, self).__init__()
+        dim = 256 + 2 + 1 # depth_attn_map
+        self.conv_adapter_rgb = torch.nn.Conv2d(2048, 2048, 1)
+        self.conv_adapter_depth = torch.nn.Conv2d(2048, 2048, 1)
+        self.conv_in = torch.nn.Conv2d(2048, 256, 3, padding=1)
+        self.lay1 = torch.nn.Conv2d(dim, dim, 3, padding=1)
+        self.bn1 = torch.nn.BatchNorm2d(dim)
+
+        self.lay2 = torch.nn.Conv2d(dim, 128, 3, padding=1)
+        self.bn2 = torch.nn.BatchNorm2d(128)
+
+        self.lay3 = torch.nn.Conv2d(128, 64, 3, padding=1)
+        self.bn3 = torch.nn.BatchNorm2d(64)
+        self.adapter1 = torch.nn.Conv2d(1024, 128, 1)
+
+        # visible mask branch
+        self.lay4_vm = torch.nn.Conv2d(64, 32, 3, padding=1)
+        self.bn4_vm = torch.nn.BatchNorm2d(32)
+        self.lay5_vm = torch.nn.Conv2d(32, 16, 3, padding=1)
+        self.bn5_vm = torch.nn.BatchNorm2d(16)
+        self.adapter2_vm = torch.nn.Conv2d(512, 64, 1)
+        self.adapter3_vm = torch.nn.Conv2d(256, 32, 1)
+        self.out_lay_vm = torch.nn.Conv2d(16, 1, 3, padding=1)
+
+        # amodal mask branch
+        self.lay4_am = torch.nn.Conv2d(64, 32, 3, padding=1)
+        self.bn4_am = torch.nn.BatchNorm2d(32)
+        self.lay5_am = torch.nn.Conv2d(32, 16, 3, padding=1)
+        self.bn5_am = torch.nn.BatchNorm2d(16)
+        self.adapter2_am = torch.nn.Conv2d(512, 64, 1)
+        self.adapter3_am = torch.nn.Conv2d(256, 32, 1)
+        self.out_lay_am = torch.nn.Conv2d(16, 1, 3, padding=1)
     
+    def get_attn_map(self, feature, guidance):
+        b,c,h,w = guidance.shape
+        q = torch.flatten(guidance, start_dim=2)
+        v = torch.flatten(feature, start_dim=2)
+
+        k = v * q
+        k = k.sum(dim=-1, keepdim=True) / (q.sum(dim=-1, keepdim=True) + 1e-6)
+        attn = (k.transpose(-2, -1) @  v) / 1
+        attn = F.softmax(attn, dim=-1)
+        attn = attn.reshape(b, c, h, w)
+        return attn
+    
+    def forward(self, rgb_features, depth_features, coarse_mask):
+        # rgb_features:    [B, 2048, 16,   16]
+        # depth_features:  [B, 2048, 16,   16]
+        # attn_map:        [B, 1,    16,   16]
+        # coarse_mask:     [B, 1,    256, 256]
+        rgb_feat = self.conv_adapter_rgb(rgb_features[-1])
+        depth_feat = self.conv_adapter_depth(depth_features[-1])
+        coarse_mask = F.interpolate(coarse_mask, scale_factor=(1/16))
+        rgb_attn_map = self.get_attn_map(rgb_feat, coarse_mask)
+        depth_attn_map = self.get_attn_map(depth_feat, coarse_mask)
+        x = self.conv_in(rgb_feat) # conv_in = torch.nn.Conv2d(2048, 256, 3, padding=1)
+        x = torch.cat((x, rgb_attn_map, depth_attn_map, coarse_mask), dim=1)
+        x = F.relu(self.bn1(self.lay1(x)))
+        x = F.relu(self.bn2(self.lay2(x)))
+        
+        cur_feat = self.adapter1(rgb_features[-2])
+        x = cur_feat + x
+        x = F.interpolate(x, size=(32, 32), mode="nearest")
+        x = F.relu(self.bn3(self.lay3(x)))
+
+        # TODO: visible mask branch
+        cur_feat_vm = self.adapter2_vm(rgb_features[-3])
+        x_vm = cur_feat_vm + x
+        x_vm = F.interpolate(x_vm, size=(64, 64), mode="nearest")
+        x_vm = F.relu(self.bn4_vm(self.lay4_vm(x_vm)))
+
+        cur_feat_vm = self.adapter3_vm(rgb_features[-4])
+        x_vm = cur_feat_vm + x_vm
+        x_vm = F.interpolate(x_vm, size=(128, 128), mode="nearest")
+        x_vm = F.relu(self.bn5_vm(self.lay5_vm(x_vm)))
+        
+        x_vm = self.out_lay_vm(x_vm)
+
+        # TODO: full mask branch
+        cur_feat_am = self.adapter2_am(rgb_features[-3])
+        x_am = cur_feat_am + x
+        x_am = F.interpolate(x_am, size=(64, 64), mode="nearest")
+        x_am = F.relu(self.bn4_am(self.lay4_am(x_am)))
+
+        cur_feat_am = self.adapter3_am(rgb_features[-4])
+        x_am = cur_feat_am + x_am
+        x_am = F.interpolate(x_am, size=(128, 128), mode="nearest")
+        x_am = F.relu(self.bn5_am(self.lay5_am(x_am)))
+        
+        x_am = self.out_lay_am(x_am)
+
+        return x_vm, x_am
+
+# 添加一层depth_attn_map和depth_feature
+class Refine_Module_RGBD_depthattnmap_depthfeature(nn.Module):
+    def __init__(self):
+        super(Refine_Module, self).__init__()
+        dim = 256 + 2 + 1 # depth_attn_map
+        self.conv_adapter_rgb = torch.nn.Conv2d(2048, 2048, 1)
+        self.conv_adapter_depth = torch.nn.Conv2d(2048, 2048, 1)
+        self.conv_in = torch.nn.Conv2d(2048, 256, 3, padding=1)
+        self.lay1 = torch.nn.Conv2d(dim, dim, 3, padding=1)
+        self.bn1 = torch.nn.BatchNorm2d(dim)
+
+        self.lay2 = torch.nn.Conv2d(dim, 128, 3, padding=1)
+        self.bn2 = torch.nn.BatchNorm2d(128)
+
+        self.lay3 = torch.nn.Conv2d(128, 64, 3, padding=1)
+        self.bn3 = torch.nn.BatchNorm2d(64)
+        self.adapter1 = torch.nn.Conv2d(1024, 128, 1)
+
+        # visible mask branch
+        self.lay4_vm = torch.nn.Conv2d(64, 32, 3, padding=1)
+        self.bn4_vm = torch.nn.BatchNorm2d(32)
+        self.lay5_vm = torch.nn.Conv2d(32, 16, 3, padding=1)
+        self.bn5_vm = torch.nn.BatchNorm2d(16)
+        self.adapter2_vm = torch.nn.Conv2d(512, 64, 1)
+        self.adapter3_vm = torch.nn.Conv2d(256, 32, 1)
+        self.out_lay_vm = torch.nn.Conv2d(16, 1, 3, padding=1)
+
+        # amodal mask branch
+        self.lay4_am = torch.nn.Conv2d(64, 32, 3, padding=1)
+        self.bn4_am = torch.nn.BatchNorm2d(32)
+        self.lay5_am = torch.nn.Conv2d(32, 16, 3, padding=1)
+        self.bn5_am = torch.nn.BatchNorm2d(16)
+        self.adapter2_am = torch.nn.Conv2d(512, 64, 1)
+        self.adapter3_am = torch.nn.Conv2d(256, 32, 1)
+        self.out_lay_am = torch.nn.Conv2d(16, 1, 3, padding=1)
+    
+    def get_attn_map(self, feature, guidance):
+        b,c,h,w = guidance.shape
+        q = torch.flatten(guidance, start_dim=2)
+        v = torch.flatten(feature, start_dim=2)
+
+        k = v * q
+        k = k.sum(dim=-1, keepdim=True) / (q.sum(dim=-1, keepdim=True) + 1e-6)
+        attn = (k.transpose(-2, -1) @  v) / 1
+        attn = F.softmax(attn, dim=-1)
+        attn = attn.reshape(b, c, h, w)
+        return attn
+    
+    def forward(self, rgb_features, depth_features, coarse_mask):
+        # rgb_features:    [B, 2048, 16,   16]
+        # depth_features:  [B, 2048, 16,   16]
+        # attn_map:        [B, 1,    16,   16]
+        # coarse_mask:     [B, 1,    256, 256]
+        rgb_feat = self.conv_adapter_rgb(rgb_features[-1])
+        depth_feat = self.conv_adapter_depth(depth_features[-1])
+        coarse_mask = F.interpolate(coarse_mask, scale_factor=(1/16))
+        rgb_attn_map = self.get_attn_map(rgb_feat, coarse_mask)
+        depth_attn_map = self.get_attn_map(depth_feat, coarse_mask)
+        x = self.conv_in(rgb_feat) # conv_in = torch.nn.Conv2d(2048, 256, 3, padding=1)
+        x = torch.cat((x, rgb_attn_map, depth_attn_map, coarse_mask), dim=1)
+        x = F.relu(self.bn1(self.lay1(x)))
+        x = F.relu(self.bn2(self.lay2(x)))
+        
+        cur_feat = self.adapter1(rgb_features[-2])
+        x = cur_feat + x
+        x = F.interpolate(x, size=(32, 32), mode="nearest")
+        x = F.relu(self.bn3(self.lay3(x)))
+
+        # TODO: visible mask branch
+        cur_feat_vm = self.adapter2_vm(rgb_features[-3])
+        x_vm = cur_feat_vm + x
+        x_vm = F.interpolate(x_vm, size=(64, 64), mode="nearest")
+        x_vm = F.relu(self.bn4_vm(self.lay4_vm(x_vm)))
+
+        cur_feat_vm = self.adapter3_vm(rgb_features[-4])
+        x_vm = cur_feat_vm + x_vm
+        x_vm = F.interpolate(x_vm, size=(128, 128), mode="nearest")
+        x_vm = F.relu(self.bn5_vm(self.lay5_vm(x_vm)))
+        
+        x_vm = self.out_lay_vm(x_vm)
+
+        # TODO: full mask branch
+        cur_feat_am = self.adapter2_am(rgb_features[-3])
+        x_am = cur_feat_am + x
+        x_am = F.interpolate(x_am, size=(64, 64), mode="nearest")
+        x_am = F.relu(self.bn4_am(self.lay4_am(x_am)))
+
+        cur_feat_am = self.adapter3_am(rgb_features[-4])
+        x_am = cur_feat_am + x_am
+        x_am = F.interpolate(x_am, size=(128, 128), mode="nearest")
+        x_am = F.relu(self.bn5_am(self.lay5_am(x_am)))
+        
+        x_am = self.out_lay_am(x_am)
+
+        return x_vm, x_am
+
+# 添加depth_attn_map和dpeth_feature，并在refinecnn中添加depth_feature
+class Refine_Module_RGBD_depthattnmap_depthfeature_depthrefine(nn.Module):
+    def __init__(self):
+        super(Refine_Module, self).__init__()
+        dim = 256 + 2 + 1 # depth_attn_map
+        self.conv_adapter_rgb = torch.nn.Conv2d(2048, 2048, 1)
+        self.conv_adapter_depth = torch.nn.Conv2d(2048, 2048, 1)
+        self.conv_in = torch.nn.Conv2d(2048, 256, 3, padding=1)
+        self.lay1 = torch.nn.Conv2d(dim, dim, 3, padding=1)
+        self.bn1 = torch.nn.BatchNorm2d(dim)
+
+        self.lay2 = torch.nn.Conv2d(dim, 128, 3, padding=1)
+        self.bn2 = torch.nn.BatchNorm2d(128)
+
+        self.lay3 = torch.nn.Conv2d(128, 64, 3, padding=1)
+        self.bn3 = torch.nn.BatchNorm2d(64)
+        self.adapter1 = torch.nn.Conv2d(1024, 128, 1)
+
+        # visible mask branch
+        self.lay4_vm = torch.nn.Conv2d(64, 32, 3, padding=1)
+        self.bn4_vm = torch.nn.BatchNorm2d(32)
+        self.lay5_vm = torch.nn.Conv2d(32, 16, 3, padding=1)
+        self.bn5_vm = torch.nn.BatchNorm2d(16)
+        self.adapter2_vm = torch.nn.Conv2d(512, 64, 1)
+        self.adapter3_vm = torch.nn.Conv2d(256, 32, 1)
+        self.out_lay_vm = torch.nn.Conv2d(16, 1, 3, padding=1)
+
+        # amodal mask branch
+        self.lay4_am = torch.nn.Conv2d(64, 32, 3, padding=1)
+        self.bn4_am = torch.nn.BatchNorm2d(32)
+        self.lay5_am = torch.nn.Conv2d(32, 16, 3, padding=1)
+        self.bn5_am = torch.nn.BatchNorm2d(16)
+        self.adapter2_am = torch.nn.Conv2d(512, 64, 1)
+        self.adapter3_am = torch.nn.Conv2d(256, 32, 1)
+        self.out_lay_am = torch.nn.Conv2d(16, 1, 3, padding=1)
+    
+    def get_attn_map(self, feature, guidance):
+        b,c,h,w = guidance.shape
+        q = torch.flatten(guidance, start_dim=2)
+        v = torch.flatten(feature, start_dim=2)
+
+        k = v * q
+        k = k.sum(dim=-1, keepdim=True) / (q.sum(dim=-1, keepdim=True) + 1e-6)
+        attn = (k.transpose(-2, -1) @  v) / 1
+        attn = F.softmax(attn, dim=-1)
+        attn = attn.reshape(b, c, h, w)
+        return attn
+    
+    def forward(self, rgb_features, depth_features, coarse_mask):
+        # rgb_features:    [B, 2048, 16,   16]
+        # depth_features:  [B, 2048, 16,   16]
+        # attn_map:        [B, 1,    16,   16]
+        # coarse_mask:     [B, 1,    256, 256]
+        rgb_feat = self.conv_adapter_rgb(rgb_features[-1])
+        depth_feat = self.conv_adapter_depth(depth_features[-1])
+        coarse_mask = F.interpolate(coarse_mask, scale_factor=(1/16))
+        rgb_attn_map = self.get_attn_map(rgb_feat, coarse_mask)
+        depth_attn_map = self.get_attn_map(depth_feat, coarse_mask)
+        x = self.conv_in(rgb_feat) # conv_in = torch.nn.Conv2d(2048, 256, 3, padding=1)
+        x = torch.cat((x, rgb_attn_map, depth_attn_map, coarse_mask), dim=1)
+        x = F.relu(self.bn1(self.lay1(x)))
+        x = F.relu(self.bn2(self.lay2(x)))
+        
+        cur_feat = self.adapter1(rgb_features[-2])
+        x = cur_feat + x
+        x = F.interpolate(x, size=(32, 32), mode="nearest")
+        x = F.relu(self.bn3(self.lay3(x)))
+
+        # TODO: visible mask branch
+        cur_feat_vm = self.adapter2_vm(rgb_features[-3])
+        x_vm = cur_feat_vm + x
+        x_vm = F.interpolate(x_vm, size=(64, 64), mode="nearest")
+        x_vm = F.relu(self.bn4_vm(self.lay4_vm(x_vm)))
+
+        cur_feat_vm = self.adapter3_vm(rgb_features[-4])
+        x_vm = cur_feat_vm + x_vm
+        x_vm = F.interpolate(x_vm, size=(128, 128), mode="nearest")
+        x_vm = F.relu(self.bn5_vm(self.lay5_vm(x_vm)))
+        
+        x_vm = self.out_lay_vm(x_vm)
+
+        # TODO: full mask branch
+        cur_feat_am = self.adapter2_am(rgb_features[-3])
+        x_am = cur_feat_am + x
+        x_am = F.interpolate(x_am, size=(64, 64), mode="nearest")
+        x_am = F.relu(self.bn4_am(self.lay4_am(x_am)))
+
+        cur_feat_am = self.adapter3_am(rgb_features[-4])
+        x_am = cur_feat_am + x_am
+        x_am = F.interpolate(x_am, size=(128, 128), mode="nearest")
+        x_am = F.relu(self.bn5_am(self.lay5_am(x_am)))
+        
+        x_am = self.out_lay_am(x_am)
+
+        return x_vm, x_am

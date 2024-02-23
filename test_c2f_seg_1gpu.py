@@ -61,7 +61,7 @@ if __name__ == '__main__':
         dataset=test_dataset,
         batch_size=config.batch_size,
         num_workers=config.test_num_workers,
-        drop_last=False
+        drop_last=True
     )
 
     sample_iterator = test_dataset.create_iterator(config.sample_size)
@@ -93,12 +93,12 @@ if __name__ == '__main__':
             iou_count += loss_eval['iou_count']
             invisible_iou_ += loss_eval['invisible_iou_']
             invisible_iou_post += loss_eval['invisible_iou_post']
-            occ_count += loss_eval['occ_count']
+            occ_count += loss_eval['occ_count'].sum()
 
             logger.info('iter {}: iou: {}, iou_post: {}, occ: {}, occ_post: {}'.format(
                 iter-1,
-                loss_eval['iou'].item(),
-                loss_eval['iou_post'].item(),
+                loss_eval['iou'].item() / loss_eval['iou_count'].item(),
+                loss_eval['iou_post'].item() / loss_eval['iou_count'].item(),
                 loss_eval['invisible_iou_'].item(),
                 loss_eval['invisible_iou_post'].item(),
             ))
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
     logger.info('meanIoU: {}'.format(iou.item() / iou_count.item()))
     logger.info('meanIoU post-process: {}'.format(iou_post.item() / iou_count.item()))
-    logger.info('meanIoU invisible: {}'.format(invisible_iou_.item() / occ_count.item()))
-    logger.info('meanIoU invisible post-process: {}'.format(invisible_iou_post.item() / occ_count.item()))
+    logger.info('meanIoU invisible: {}'.format(invisible_iou_.item() / (occ_count.item()+1e-10) ))
+    logger.info('meanIoU invisible post-process: {}'.format(invisible_iou_post.item() / (occ_count.item()+1e-10)))
     logger.info('iou_count: {}'.format(iou_count))
     logger.info('occ_count: {}'.format(occ_count))

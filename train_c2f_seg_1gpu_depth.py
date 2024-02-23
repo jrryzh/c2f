@@ -30,10 +30,19 @@ if __name__ == '__main__':
     parser.add_argument('--data_type', type=str, default="image", help = "select image or video model")
     parser.add_argument('--batch', type=int, default=1)
 
+    # model
+    parser.add_argument('--model', type=str, default="original", required=True, help = "select original or improved model")
+
     args = parser.parse_args()
 
     if args.data_type=="image":
-        from src.image_model_new import C2F_Seg_New
+        if args.model == "original":
+            from src.image_model import C2F_Seg
+        elif args.model == "rgbd_resnet":
+            from src.image_model_depth_resnet import C2F_Seg
+        elif args.model == "rgbd_fusion":
+            from src.image_model_depth_fusion import C2F_Seg
+
     elif args.data_type=="video":
         from src.video_model import C2F_Seg
 
@@ -82,7 +91,7 @@ if __name__ == '__main__':
     random.seed(config.seed)
     torch.cuda.manual_seed_all(config.seed)
     
-    model = C2F_Seg(config, mode='train', logger=logger)
+    model = C2F_Seg_RGBD(config, mode='train', logger=logger)
     model.load(is_test=False, prefix = config.stage2_iteration)
     model.to(config.device)
     

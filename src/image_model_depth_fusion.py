@@ -20,9 +20,9 @@ from utils.evaluation import evaluation_image
 from utils.loss import CrossEntropyLoss
 
 
-class C2F_Seg_New(nn.Module):
+class C2F_Seg(nn.Module):
     def __init__(self, config, mode, logger=None, save_eval_dict={}):
-        super(C2F_Seg_New, self).__init__()
+        super(C2F_Seg, self).__init__()
         self.config = config
         self.iteration = 0
         self.sample_iter = 0
@@ -113,8 +113,7 @@ class C2F_Seg_New(nn.Module):
         self.iteration += 1
         img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
         depth_feat = self.depth_encoder(meta['depth_crop'].permute((0,3,1,2)).to(torch.float32))
-        # TODO: 待确定
-        fusion_feat = self.rgbd_fusion_conv(img_feat, depth_feat)
+
 
         pred_fm_crop = meta["vm_crop_gt"]
         pred_vm_crop, pred_fm_crop = self.refine_module(fusion_feat, pred_fm_crop.detach())

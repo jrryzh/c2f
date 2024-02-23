@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torchvision import transforms
 
 from taming_src.taming_models import VQModel
-from src.image_component import MaskedTransformer, Resnet_Encoder, Refine_Module
+from src.image_component import MaskedTransformer, Resnet_Encoder, RGBD_Resnet_Encoder, Refine_Module
 from src.loss import VGG19, PerceptualLoss
 from utils.pytorch_optimization import AdamW, get_linear_schedule_with_warmup
 from utils.utils import torch_show_all_params, torch_init_model
@@ -37,7 +37,7 @@ class C2F_Seg(nn.Module):
         self.eps = 1e-6
         self.train_sample_iters = config.train_sample_iters
         
-        self.img_encoder = Resnet_Encoder().to(config.device)
+        self.encoder = RGBD_Resnet_Encoder().to(config.device)
         self.refine_module = Refine_Module().to(config.device)
 
         self.refine_criterion = nn.BCELoss()
@@ -57,7 +57,7 @@ class C2F_Seg(nn.Module):
             self.perceptual_loss = None
 
         # loss
-        param_optimizer_encoder = self.img_encoder.named_parameters()
+        param_optimizer_encoder = self.encoder.named_parameters()
         param_optimizer_refine= self.refine_module.named_parameters()
         optimizer_parameters = [
             {'params': [p for n, p in param_optimizer_encoder], 'weight_decay': config.weight_decay},
@@ -105,10 +105,12 @@ class C2F_Seg(nn.Module):
 
     def get_losses(self, meta):
         self.iteration += 1
-        img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
-
+        rgbd_crop = torch.cat((items["img_crop"], items["depth_crop"]), dim=-1)
+        rgbd_feat = self.encoder(rgbd_crop.permute((0,3,1,2)).to(torch.float32))
+        
+        # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
         pred_fm_crop = meta["vm_crop_gt"]
-        pred_vm_crop, pred_fm_crop = self.refine_module(img_feat, pred_fm_crop.detach())
+        pred_vm_crop, pred_fm_crop = self.refine_module(rgbd_feat, pred_fm_crop.detach())
         pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
         pred_vm_crop = torch.sigmoid(pred_vm_crop)
         loss_vm = self.refine_criterion(pred_vm_crop, meta['vm_crop_gt'])
@@ -167,7 +169,7 @@ class C2F_Seg(nn.Module):
         loss_eval["iou"] = iou
         loss_eval["invisible_iou_"] = invisible_iou_
         loss_eval["occ_count"] = iou_count
-        loss_eval["iou_count"] = torch.Tensor([pred_fm.shape[0]]).cuda()
+        loss_eval["iou_count"] = torch.Tensor([1]).cuda()
         pred_fm_post = pred_fm + vm_no_crop
         
         pred_fm_post = (pred_fm_post>0.5).to(torch.int64)
@@ -197,11 +199,12 @@ class C2F_Seg(nn.Module):
         '''
         self.sample_iter += 1
 
-        img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
+        rgbd_crop = torch.cat((items["img_crop"], items["depth_crop"]), dim=-1)
+        rgbd_feat = self.encoder(rgbd_crop.permute((0,3,1,2)).to(torch.float32))
         
         # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
         pred_fm_crop_old = meta["vm_crop_gt"]
-        pred_vm_crop, pred_fm_crop = self.refine_module(img_feat, pred_fm_crop_old)
+        pred_vm_crop, pred_fm_crop = self.refine_module(rgbd_feat, pred_fm_crop_old)
 
         pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
         pred_vm_crop = torch.sigmoid(pred_vm_crop)

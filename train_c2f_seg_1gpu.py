@@ -33,7 +33,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.data_type=="image":
-        from src.image_model import C2F_Seg
+        if args.model == "original":
+            from src.image_model import C2F_Seg
+        elif args.model == "rgbd_resnet":
+            from src.image_model_depth_resnet import C2F_Seg
+        elif args.model == "rgbd_fusion":
+            from src.image_model_depth_fusion import C2F_Seg
     elif args.data_type=="video":
         from src.video_model import C2F_Seg
 

@@ -22,8 +22,11 @@ def evaluation_image(frame_pred, frame_label, counts, meta, save_dict=None):
 
     iou_ = get_IoU(frame_pred, frame_label)
     invisible_iou_= iou(frame_pred - vm_no_crop_gt, frame_label - vm_no_crop_gt)
-    if (frame_label - vm_no_crop_gt).sum()==0:
-        counts-=1
+    # if (frame_label - vm_no_crop_gt).sum()==0:
+    #     counts-=1
+    # FIX: counts计算存在问题，重新计算
+    counts -= ((frame_label - vm_no_crop_gt).sum((0,-1,-2))==0).int()
+
     return iou_.sum(),  invisible_iou_, counts
 
 
