@@ -40,11 +40,19 @@ if __name__ == '__main__':
     parser.add_argument('--data_type', type=str, default="image", help = "select image or video model")
     parser.add_argument('--batch', type=int, default=1)
 
+    # model
+    parser.add_argument('--model', type=str, default="original", help = "select model type")
+
     parser.add_argument("--local_rank", default=-1, type=int, help="node rank for distributed training")
     args = parser.parse_args()
 
     if args.data_type=="image":
-        from src.image_model import C2F_Seg
+        if args.model == "original":
+            from src.image_model import C2F_Seg
+        elif args.model == "rgbd_4channel":
+            from src.image_model_depth_resnet import C2F_Seg
+        elif args.model == "rgbd_fusion":
+            from src.image_model_depth_fusion import C2F_Seg
     elif args.data_type=="video":
         from src.video_model import C2F_Seg
 

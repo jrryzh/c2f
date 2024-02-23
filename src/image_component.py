@@ -28,43 +28,43 @@ class rgbd_resnet(nn.Module):
     def __init__(self):
         super(rgbd_resnet, self).__init__()
         # 加载预训练的 ResNet50 模型
-        resnet50_pretrained = resnet50(pretrained=True)
-        
+        self.model = resnet50(pretrained=True)
         # 创建新的第一层卷积，以接受 6 通道输入
-        self.conv1 = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        old_conv = self.model.conv1
+        self.model.conv1 = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
         # 将原始第一层的权重复制到新层的前3个通道
-        self.conv1.weight.data[:, :3, :, :] = resnet50_pretrained.conv1.weight.data
+        self.model.conv1.weight.data[:, :3, :, :] = old_conv.weight.data
         # 初始化后3个通道的权重
         # 这里我们简单地使用前三个通道的平均值
-        self.conv1.weight.data[:, 3:, :, :] = torch.mean(resnet50_pretrained.conv1.weight.data, dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        self.model.conv1.weight.data[:, 3:, :, :] = torch.mean(old_conv.weight.data, dim=1, keepdim=True).expand(-1, 3, -1, -1)
         
         # 使用预训练的模型的其他部分，除了原始的conv1
-        # self.bn1 = resnet50_pretrained.bn1
-        # self.relu = resnet50_pretrained.relu
-        # self.maxpool = resnet50_pretrained.maxpool
-        # self.layer1 = resnet50_pretrained.layer1
-        # self.layer2 = resnet50_pretrained.layer2
-        # self.layer3 = resnet50_pretrained.layer3
-        # self.layer4 = resnet50_pretrained.layer4
+        # self.model.bn1 = resnet50_pretrained.bn1
+        # self.model.relu = resnet50_pretrained.relu
+        # self.model.maxpool = resnet50_pretrained.maxpool
+        # self.model.layer1 = resnet50_pretrained.layer1
+        # self.model.layer2 = resnet50_pretrained.layer2
+        # self.model.layer3 = resnet50_pretrained.layer3
+        # self.model.layer4 = resnet50_pretrained.layer4
         
         # 调整 layer4 以改变特征图的分辨率
-        self.layer4[0].downsample[0].stride = (1, 1)
-        self.layer4[0].conv2.stride = (1, 1)
+        self.model.layer4[0].downsample[0].stride = (1, 1)
+        self.model.layer4[0].conv2.stride = (1, 1)
 
     def forward(self, x):
         features = []
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
         
-        x = self.layer1(x)
+        x = self.model.layer1(x)
         features.append(x)
-        x = self.layer2(x)
+        x = self.model.layer2(x)
         features.append(x)
-        x = self.layer3(x)
+        x = self.model.layer3(x)
         features.append(x)
-        x = self.layer4(x)
+        x = self.model.layer4(x)
         features.append(x)
         
         return features

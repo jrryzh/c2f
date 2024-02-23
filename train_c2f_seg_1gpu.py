@@ -30,12 +30,15 @@ if __name__ == '__main__':
     parser.add_argument('--data_type', type=str, default="image", help = "select image or video model")
     parser.add_argument('--batch', type=int, default=1)
 
+    # model
+    parser.add_argument('--model', type=str, default="original", help = "select model type")
+
     args = parser.parse_args()
 
     if args.data_type=="image":
         if args.model == "original":
             from src.image_model import C2F_Seg
-        elif args.model == "rgbd_resnet":
+        elif args.model == "rgbd_4channel":
             from src.image_model_depth_resnet import C2F_Seg
         elif args.model == "rgbd_fusion":
             from src.image_model_depth_fusion import C2F_Seg

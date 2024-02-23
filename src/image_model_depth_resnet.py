@@ -105,7 +105,7 @@ class C2F_Seg(nn.Module):
 
     def get_losses(self, meta):
         self.iteration += 1
-        rgbd_crop = torch.cat((items["img_crop"], items["depth_crop"]), dim=-1)
+        rgbd_crop = torch.cat((meta["img_crop"], meta["depth_crop"]), dim=-1)
         rgbd_feat = self.encoder(rgbd_crop.permute((0,3,1,2)).to(torch.float32))
         
         # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt

@@ -27,7 +27,7 @@ def evaluation_image(frame_pred, frame_label, counts, meta, save_dict=None):
     # FIX: counts计算存在问题，重新计算
     counts -= ((frame_label - vm_no_crop_gt).sum((0,-1,-2))==0).int()
 
-    return iou_.sum(),  invisible_iou_, counts
+    return iou_.sum(),  invisible_iou_, count
 
 
 def iou(pred, labels, average=True, return_num=False):
