@@ -11,6 +11,78 @@ from torch.utils.data.dataloader import default_collate
 import pycocotools.mask as mask_utils
 import matplotlib.pyplot as plt
 import glob
+import torch
+import imageio
+
+def normalize_depth(depth, min_val=250.0, max_val=1500.0):
+    """ normalize the input depth (mm) and return depth image (0 ~ 255)
+    Args:
+        depth ([np.float]): depth array [H, W] (mm) 
+        min_val (float, optional): [min depth]. Defaults to 250 mm
+        max_val (float, optional): [max depth]. Defaults to 1500 mm.
+
+    Returns:
+        [np.uint8]: normalized depth array [H, W, 3] (0 ~ 255)
+    """
+    depth[depth < min_val] = min_val
+    depth[depth > max_val] = max_val
+    depth = (depth - min_val) / (max_val - min_val) * 255
+    depth = np.expand_dims(depth, -1)
+    depth = np.uint8(np.repeat(depth, 3, -1))
+    return depth
+
+def unnormalize_depth(depth, min_val=250.0, max_val=1500.0):
+    """ unnormalize the input depth (0 ~ 255) and return depth image (mm)
+    Args:
+        depth([np.uint8]): normalized depth array [H, W, 3] (0 ~ 255)
+        min_val (float, optional): [min depth]. Defaults to 250 mm
+        max_val (float, optional): [max depth]. Defaults to 1500 mm.
+    Returns:
+        [np.float]: depth array [H, W] (mm) 
+    """
+    depth = np.float32(depth) / 255
+    depth = depth * (max_val - min_val) + min_val
+    return depth
+
+
+def inpaint_depth(depth, factor=1, kernel_size=3, dilate=False):
+    """ inpaint the input depth where the value is equal to zero
+
+    Args:
+        depth ([np.uint8]): normalized depth array [H, W, 3] (0 ~ 255)
+        factor (int, optional): resize factor in depth inpainting. Defaults to 4.
+        kernel_size (int, optional): kernel size in depth inpainting. Defaults to 5.
+
+    Returns:
+        [np.uint8]: inpainted depth array [H, W, 3] (0 ~ 255)
+    """
+    
+    H, W, _ = depth.shape
+    resized_depth = cv2.resize(depth, (W//factor, H//factor))
+    mask = np.all(resized_depth == 0, axis=2).astype(np.uint8)
+    if dilate:
+        mask = cv2.dilate(mask, np.ones((kernel_size, kernel_size), np.uint8), iterations=1)
+    inpainted_data = cv2.inpaint(resized_depth, mask, kernel_size, cv2.INPAINT_TELEA)
+    inpainted_data = cv2.resize(inpainted_data, (W, H))
+    depth = np.where(depth == 0, inpainted_data, depth)
+    return depth
+
+
+def array_to_tensor(array):
+    """ Converts a numpy.ndarray (N x H x W x C) to a torch.FloatTensor of shape (N x C x H x W)
+        OR
+        converts a nump.ndarray (H x W x C) to a torch.FloatTensor of shape (C x H x W)
+    """
+
+    if array.ndim == 4: # NHWC
+        tensor = torch.from_numpy(array).permute(0,3,1,2).float()
+    elif array.ndim == 3: # HWC
+        tensor = torch.from_numpy(array).permute(2,0,1).float()
+    else: # everything else
+        tensor = torch.from_numpy(array).float()
+
+    return tensor
+
 
 def get_bbox(mask):
     ys, xs = np.where(mask)
@@ -27,6 +99,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
         self.mode = mode
         self.dataset_path = "/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/"
         self.rgb_paths = sorted(glob.glob("{}/image_color/*.png".format(self.dataset_path)))
+        self.depth_paths = sorted(glob.glob("{}/disparity/*.png".format(self.dataset_path)))
         # can get occluded mask from annotation
         self.anno_paths = sorted(glob.glob("{}/annotation/*.png".format(self.dataset_path)))
         self.amodal_anno_paths = sorted(glob.glob("{}/amodal_annotation/*.png".format(self.dataset_path)))
@@ -53,10 +126,14 @@ class Fusion_OSD(torch.utils.data.Dataset):
         img_name = anno_file.split('/')[-1].split('_')[0] + '.png'
         anno_id = int(anno_file.split('/')[-1].split('_')[1].strip('.png'))
 
-        # 获得img
+        # 获得img和depth
         img = cv2.imread(os.path.join("/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/image_color", img_name))
-        # anno_id, img_path = self.label_info[index].split(",")
         height, width, _ = img.shape
+        depth = imageio.imread(os.path.join("/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/disparity", img_name))
+        depth = normalize_depth(depth)
+        depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_NEAREST)
+        depth = inpaint_depth(depth)        # anno_id, img_path = self.label_info[index].split(",")
+
 
         # ann = self.anns_dict_list[index]
         if "learn" in img_name:
@@ -159,6 +236,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
                     # "fm_no_crop": fm_no_crop,
                     "fm_crop": fm_crop,
                     "img_crop": img_crop,
+                    
                     # "loss_mask": loss_mask,
                     "obj_position": obj_position,
                     "vm_pad": vm_pad,

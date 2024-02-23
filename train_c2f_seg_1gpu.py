@@ -153,6 +153,9 @@ if __name__ == '__main__':
             writer.add_scalar("loss/r_loss", r_loss, model.iteration)
             logs = [("epoch", epoch), ("iter", iteration), ('lr', model.sche.get_lr()[0])] + logs
             progbar.add(config.batch_size, values=logs)
+
+            # DEBUG: 
+            config.val_vis_iters, config.log_iters = 5, 5
             if iteration % config.val_vis_iters == 0:
                 model.eval()
                 # For image amodal dataset
@@ -166,7 +169,7 @@ if __name__ == '__main__':
                         sample_iter = model.sample_iter
                         loss_eval = model.batch_predict_maskgit(items, sample_iter, 'val')
                         iou = loss_eval['iou'].item() / (loss_eval['iou_count'].item() + 1e-7)
-                        invisible_iou_ = loss_eval['invisible_iou_'].item() / (loss_eval['iou_count'].item() + 1e-7)
+                        invisible_iou_ = loss_eval['invisible_iou_'].item()
                         print(
                             "img_id: ",int(anno_id[0].cpu().detach().numpy())," - ",
                             "anno_id: ",int(anno_id[0].cpu().detach().numpy())," - ",

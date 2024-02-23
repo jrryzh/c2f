@@ -20,11 +20,17 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="MOViD_A", help="select dataset")
     parser.add_argument('--data_type', type=str, default="image", help="select image or video model")
     parser.add_argument('--batch', type=int, default=1)
+    parser.add_argument('--model', type=str, default="original", help = "select model type")
 
     args = parser.parse_args()
 
-    if args.data_type == "image":
-        from src.image_model import C2F_Seg
+    if args.data_type=="image":
+        if args.model == "original":
+            from src.image_model import C2F_Seg
+        elif args.model == "rgbd_4channel":
+            from src.image_model_depth_resnet import C2F_Seg
+        elif args.model == "rgbd_fusion":
+            from src.image_model_depth_fusion import C2F_Seg
     elif args.data_type == "video":
         from src.video_model import C2F_Seg
 
@@ -99,8 +105,8 @@ if __name__ == '__main__':
                 iter-1,
                 loss_eval['iou'].item() / loss_eval['iou_count'].item(),
                 loss_eval['iou_post'].item() / loss_eval['iou_count'].item(),
-                loss_eval['invisible_iou_'].item(),
-                loss_eval['invisible_iou_post'].item(),
+                loss_eval['invisible_iou_'].item() / (loss_eval['occ_count'].sum().item() + 1e-10),
+                loss_eval['invisible_iou_post'].item() / (loss_eval['occ_count'].sum().item() + 1e-10),
             ))
             torch.cuda.empty_cache()
 

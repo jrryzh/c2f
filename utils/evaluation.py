@@ -21,13 +21,13 @@ def evaluation_image(frame_pred, frame_label, counts, meta, save_dict=None):
     frame_label = frame_label.unsqueeze(0)
 
     iou_ = get_IoU(frame_pred, frame_label)
-    invisible_iou_= iou(frame_pred - vm_no_crop_gt, frame_label - vm_no_crop_gt)
+    invisible_iou_= iou(frame_pred - vm_no_crop_gt, frame_label - vm_no_crop_gt, average=False)
     # if (frame_label - vm_no_crop_gt).sum()==0:
     #     counts-=1
     # FIX: counts计算存在问题，重新计算
     counts -= ((frame_label - vm_no_crop_gt).sum((0,-1,-2))==0).int()
 
-    return iou_.sum(),  invisible_iou_, count
+    return iou_.sum(),  invisible_iou_, counts
 
 
 def iou(pred, labels, average=True, return_num=False):
@@ -36,7 +36,7 @@ def iou(pred, labels, average=True, return_num=False):
     labels = (labels>0.5).float()
     intersection = pred * labels
     union = (pred + labels) - intersection
-    iou = intersection.sum(-1).sum(-1).sum(-1) / (union.sum(-1).sum(-1).sum(-1) + e)
+    iou = intersection.sum(-1).sum(-1) / (union.sum(-1).sum(-1) + e)
     if return_num:
         num = (iou!=1.).sum()
         return iou[iou!=1].sum(), num

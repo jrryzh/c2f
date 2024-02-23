@@ -169,7 +169,7 @@ class C2F_Seg(nn.Module):
         loss_eval["iou"] = iou
         loss_eval["invisible_iou_"] = invisible_iou_
         loss_eval["occ_count"] = iou_count
-        loss_eval["iou_count"] = torch.Tensor([1]).cuda()
+        loss_eval["iou_count"] = torch.Tensor([pred_fm.shape[0]]).cuda()
         pred_fm_post = pred_fm + vm_no_crop
         
         pred_fm_post = (pred_fm_post>0.5).to(torch.int64)
@@ -199,7 +199,7 @@ class C2F_Seg(nn.Module):
         '''
         self.sample_iter += 1
 
-        rgbd_crop = torch.cat((items["img_crop"], items["depth_crop"]), dim=-1)
+        rgbd_crop = torch.cat((meta["img_crop"], meta["depth_crop"]), dim=-1)
         rgbd_feat = self.encoder(rgbd_crop.permute((0,3,1,2)).to(torch.float32))
         
         # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
