@@ -39,7 +39,7 @@ if __name__ == '__main__':
         if args.model == "original":
             from src.image_model import C2F_Seg
         elif args.model == "rgbd_4channel":
-            from src.image_model_depth_resnet import C2F_Seg
+            from src.image_model_depth_4channel import C2F_Seg
         elif args.model == "rgbd_fusion":
             from src.image_model_depth_fusion import C2F_Seg
     elif args.data_type=="video":
@@ -154,8 +154,6 @@ if __name__ == '__main__':
             logs = [("epoch", epoch), ("iter", iteration), ('lr', model.sche.get_lr()[0])] + logs
             progbar.add(config.batch_size, values=logs)
 
-            # DEBUG: 
-            config.val_vis_iters, config.log_iters = 5, 5
             if iteration % config.val_vis_iters == 0:
                 model.eval()
                 # For image amodal dataset

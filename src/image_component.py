@@ -18,7 +18,6 @@ class RGBDFusionConv(nn.Module):
     def forward(self, rgb_features, depth_features):
         # 假设rgb_features和depth_features都是最终的特征图，且它们的维度相同
         # 在特征维度上进行拼接
-        import ipdb; ipdb.set_trace()
         fused_features = torch.cat([rgb_features, depth_features], dim=1)
         # 通过1x1卷积进行特征融合
         fused_features = self.fusion_conv(fused_features)

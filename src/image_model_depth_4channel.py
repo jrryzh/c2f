@@ -291,7 +291,7 @@ class C2F_Seg(nn.Module):
                 print('Rank {} is loading {} Transformer...'.format(self.rank, transformer_path))
                 data = torch.load(transformer_path, map_location="cpu")
                 
-                torch_init_model(self.img_encoder, transformer_path, 'img_encoder')
+                torch_init_model(self.encoder, transformer_path, 'encoder')
                 torch_init_model(self.refine_module, transformer_path, 'refine')
 
                 if self.config.restore:
@@ -317,7 +317,7 @@ class C2F_Seg(nn.Module):
         torch.save({
             'iteration': self.iteration,
             'sample_iter': self.sample_iter,
-            'img_encoder': self.img_encoder.state_dict(),
+            'encoder': self.encoder.state_dict(),
             'refine': self.refine_module.state_dict(),
             'opt': self.opt.state_dict(),
         }, save_path)
