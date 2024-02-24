@@ -260,7 +260,12 @@ class Fusion_UOAIS(torch.utils.data.Dataset):
         img = cv2.imread(os.path.join(self.img_root_path, self.img_dict_list[index]["file_name"]), cv2.IMREAD_COLOR)
         height, width, _ = img.shape
         depth = imageio.imread(os.path.join(self.img_root_path, self.img_dict_list[index]["depth_file_name"]))
-        depth = normalize_depth(depth)
+        if self.img_dict_list[index]["depth_file_name"].startswith("bin"):
+            depth = normalize_depth(depth, min_val=0.0, max_val=15000.0)
+        elif self.img_dict_list[index]["depth_file_name"].startswith("tabletop"):
+            depth = normalize_depth(depth, min_val=0.0, max_val=25000.0)
+        else:
+            raise Exception("wrong name in depth file")
         depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_NEAREST)
         depth = inpaint_depth(depth)
 

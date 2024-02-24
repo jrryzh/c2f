@@ -49,7 +49,7 @@ if __name__ == '__main__':
     if args.data_type=="image":
         if args.model == "original":
             from src.image_model import C2F_Seg
-        elif args.model == "rgbd_4channel":
+        elif args.model == "rgbd_6channel":
             from src.image_model_depth_resnet import C2F_Seg
         elif args.model == "rgbd_fusion":
             from src.image_model_depth_fusion import C2F_Seg

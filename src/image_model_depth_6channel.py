@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torchvision import transforms
 
 from taming_src.taming_models import VQModel
-from src.image_component import MaskedTransformer, Resnet_Encoder, Refine_Module, RGBDFusionConv
+from src.image_component import MaskedTransformer, Resnet_Encoder, RGBD_Resnet_Encoder, Refine_Module
 from src.loss import VGG19, PerceptualLoss
 from utils.pytorch_optimization import AdamW, get_linear_schedule_with_warmup
 from utils.utils import torch_show_all_params, torch_init_model
@@ -37,14 +37,8 @@ class C2F_Seg(nn.Module):
         self.eps = 1e-6
         self.train_sample_iters = config.train_sample_iters
         
-        self.img_encoder = Resnet_Encoder().to(config.device)
-        self.depth_encoder = Resnet_Encoder().to(config.device)
+        self.encoder = RGBD_Resnet_Encoder().to(config.device)
         self.refine_module = Refine_Module().to(config.device)
-
-        self.rgbd_fusion_conv_256 = RGBDFusionConv(256).to(config.device) # 注意：假设是resnet50
-        self.rgbd_fusion_conv_512 = RGBDFusionConv(512).to(config.device) # 注意：假设是resnet50
-        self.rgbd_fusion_conv_1024 = RGBDFusionConv(1024).to(config.device) # 注意：假设是resnet50
-        self.rgbd_fusion_conv_2048 = RGBDFusionConv(2048).to(config.device) # 注意：假设是resnet50
 
         self.refine_criterion = nn.BCELoss()
         self.criterion = CrossEntropyLoss(num_classes=config.vocab_size+1, device=config.device)
@@ -63,22 +57,11 @@ class C2F_Seg(nn.Module):
             self.perceptual_loss = None
 
         # loss
-        param_optimizer_img_encoder = self.img_encoder.named_parameters()
-        param_optimizer_depth_encoder = self.depth_encoder.named_parameters()
-        param_optimizer_fusion_conv_256 = self.rgbd_fusion_conv_256.named_parameters()
-        param_optimizer_fusion_conv_512 = self.rgbd_fusion_conv_512.named_parameters()
-        param_optimizer_fusion_conv_1024 = self.rgbd_fusion_conv_1024.named_parameters()
-        param_optimizer_fusion_conv_2048 = self.rgbd_fusion_conv_2048.named_parameters()
-
+        param_optimizer_encoder = self.encoder.named_parameters()
         param_optimizer_refine= self.refine_module.named_parameters()
         optimizer_parameters = [
-            {'params': [p for n, p in param_optimizer_img_encoder], 'weight_decay': config.weight_decay},
-            {'params': [p for n, p in param_optimizer_depth_encoder], 'weight_decay': config.weight_decay},
+            {'params': [p for n, p in param_optimizer_encoder], 'weight_decay': config.weight_decay},
             {'params': [p for n, p in param_optimizer_refine], 'weight_decay': config.weight_decay},
-            {'params': [p for n, p in param_optimizer_fusion_conv_256], 'weight_decay': config.weight_decay},
-            {'params': [p for n, p in param_optimizer_fusion_conv_512], 'weight_decay': config.weight_decay},
-            {'params': [p for n, p in param_optimizer_fusion_conv_1024], 'weight_decay': config.weight_decay},
-            {'params': [p for n, p in param_optimizer_fusion_conv_2048], 'weight_decay': config.weight_decay},
         ]
 
         self.opt = AdamW(params=optimizer_parameters,
@@ -122,19 +105,12 @@ class C2F_Seg(nn.Module):
 
     def get_losses(self, meta):
         self.iteration += 1
-        img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
-        depth_feat = self.depth_encoder(meta['depth_crop'].permute((0,3,1,2)).to(torch.float32))
-        # TODO: 待确定
-        fusion_feat = []
-        fusion_feat.append(self.rgbd_fusion_conv_256(img_feat[0], depth_feat[0]))
-        fusion_feat.append(self.rgbd_fusion_conv_512(img_feat[1], depth_feat[1]))
-        fusion_feat.append(self.rgbd_fusion_conv_1024(img_feat[2], depth_feat[2]))
-        fusion_feat.append(self.rgbd_fusion_conv_2048(img_feat[3], depth_feat[3]))
-
+        rgbd_crop = torch.cat((meta["img_crop"], meta["depth_crop"]), dim=-1)
+        rgbd_feat = self.encoder(rgbd_crop.permute((0,3,1,2)).to(torch.float32))
+        
         # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
-        pred_fm_crop_old = meta["vm_crop_gt"]
-        pred_vm_crop, pred_fm_crop = self.refine_module(fusion_feat, pred_fm_crop_old)
-
+        pred_fm_crop = meta["vm_crop_gt"]
+        pred_vm_crop, pred_fm_crop = self.refine_module(rgbd_feat, pred_fm_crop.detach())
         pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
         pred_vm_crop = torch.sigmoid(pred_vm_crop)
         loss_vm = self.refine_criterion(pred_vm_crop, meta['vm_crop_gt'])
@@ -223,18 +199,12 @@ class C2F_Seg(nn.Module):
         '''
         self.sample_iter += 1
 
-        img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
-        depth_feat = self.depth_encoder(meta['depth_crop'].permute((0,3,1,2)).to(torch.float32))
-        #  TODO: 待确定
-        fusion_feat = []
-        fusion_feat.append(self.rgbd_fusion_conv_256(img_feat[0], depth_feat[0]))
-        fusion_feat.append(self.rgbd_fusion_conv_512(img_feat[1], depth_feat[1]))
-        fusion_feat.append(self.rgbd_fusion_conv_1024(img_feat[2], depth_feat[2]))
-        fusion_feat.append(self.rgbd_fusion_conv_2048(img_feat[3], depth_feat[3]))
-
+        rgbd_crop = torch.cat((meta["img_crop"], meta["depth_crop"]), dim=-1)
+        rgbd_feat = self.encoder(rgbd_crop.permute((0,3,1,2)).to(torch.float32))
+        
         # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
         pred_fm_crop_old = meta["vm_crop_gt"]
-        pred_vm_crop, pred_fm_crop = self.refine_module(fusion_feat, pred_fm_crop_old)
+        pred_vm_crop, pred_fm_crop = self.refine_module(rgbd_feat, pred_fm_crop_old)
 
         pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
         pred_vm_crop = torch.sigmoid(pred_vm_crop)
@@ -321,12 +291,7 @@ class C2F_Seg(nn.Module):
                 print('Rank {} is loading {} Transformer...'.format(self.rank, transformer_path))
                 data = torch.load(transformer_path, map_location="cpu")
                 
-                torch_init_model(self.img_encoder, transformer_path, 'img_encoder')
-                torch_init_model(self.depth_encoder, transformer_path, 'depth_encoder')
-                torch_init_model(self.rgbd_fusion_conv_256, transformer_path, 'fusion_256')
-                torch_init_model(self.rgbd_fusion_conv_512, transformer_path, 'fusion_512')
-                torch_init_model(self.rgbd_fusion_conv_1024, transformer_path, 'fusion_1024')
-                torch_init_model(self.rgbd_fusion_conv_2048, transformer_path, 'fusion_2048')
+                torch_init_model(self.encoder, transformer_path, 'encoder')
                 torch_init_model(self.refine_module, transformer_path, 'refine')
 
                 if self.config.restore:
@@ -352,13 +317,8 @@ class C2F_Seg(nn.Module):
         torch.save({
             'iteration': self.iteration,
             'sample_iter': self.sample_iter,
-            'img_encoder': self.img_encoder.state_dict(),
-            'depth_encoder': self.depth_encoder.state_dict(),
+            'encoder': self.encoder.state_dict(),
             'refine': self.refine_module.state_dict(),
-            'fusion_256': self.rgbd_fusion_conv_256.state_dict(),
-            'fusion_512': self.rgbd_fusion_conv_512.state_dict(),
-            'fusion_1024': self.rgbd_fusion_conv_1024.state_dict(),
-            'fusion_2048': self.rgbd_fusion_conv_2048.state_dict(),
             'opt': self.opt.state_dict(),
         }, save_path)
 

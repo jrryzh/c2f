@@ -130,7 +130,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
         img = cv2.imread(os.path.join("/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/image_color", img_name))
         height, width, _ = img.shape
         depth = imageio.imread(os.path.join("/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/disparity", img_name))
-        depth = normalize_depth(depth)
+        depth = normalize_depth(depth, min_val=250.0, max_val=1500.0)
         depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_NEAREST)
         depth = inpaint_depth(depth)        # anno_id, img_path = self.label_info[index].split(",")
 

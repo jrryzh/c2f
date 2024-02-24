@@ -34,8 +34,9 @@ class rgbd_resnet(nn.Module):
         # 将原始第一层的权重复制到新层的前3个通道
         self.model.conv1.weight.data[:, :3, :, :] = old_conv.weight.data
         # 初始化后3个通道的权重
-        # 这里我们简单地使用前三个通道的平均值
-        self.model.conv1.weight.data[:, 3:, :, :] = torch.mean(old_conv.weight.data, dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        # 这里我们简单地使用前三个通道的平均值 no
+        # 改为复制前三个通道的平均值 yes
+        self.model.conv1.weight.data[:, 3:, :, :] = old_conv.weight.data
         
         # 使用预训练的模型的其他部分，除了原始的conv1
         # self.model.bn1 = resnet50_pretrained.bn1
