@@ -97,7 +97,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
         super(Fusion_OSD, self).__init__()
         self.config = config
         self.mode = mode
-        self.dataset_path = "/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/"
+        self.dataset_path = "/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth"
         self.rgb_paths = sorted(glob.glob("{}/image_color/*.png".format(self.dataset_path)))
         self.depth_paths = sorted(glob.glob("{}/disparity/*.png".format(self.dataset_path)))
         # can get occluded mask from annotation
@@ -153,7 +153,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
 
         if np.sum(vm_no_crop)==0:
             counts = np.array([0])
-            print("DEBUG: all zeors: ",img_name)
+            print("DEBUG: all zeors: ",anno_file)
             return dict()
         else:
             counts = np.array([1])
@@ -173,7 +173,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
             fm_crop = fm_no_crop[x_min:x_max+1, y_min:y_max+1].astype(bool)
             vm_crop = vm_no_crop[x_min:x_max+1, y_min:y_max+1].astype(bool)
             img_crop = img[x_min:x_max+1, y_min:y_max+1]
-
+            depth_crop = depth[x_min:x_max+1, y_min:y_max+1]
             h, w = vm_crop.shape[:2]
             m = transform.rescale(vm_crop, (self.patch_h/h, self.patch_w/w))
             cur_h, cur_w = m.shape[:2]
@@ -186,7 +186,12 @@ class Fusion_OSD(torch.utils.data.Dataset):
             to_pad = ((0, max(self.patch_h-cur_h, 0)), (0, max(self.patch_w-cur_w, 0)), (0, 0))
             img_ = np.pad(img_, to_pad)[:self.patch_h, :self.patch_w, :3]
             img_crop = img_
-
+            # 修改：添加depth
+            depth_ = transform.rescale(depth_crop, (self.patch_h/h, self.patch_w/w, 1))
+            cur_h, cur_w = depth_.shape[:2]
+            to_pad = ((0, max(self.patch_h-cur_h, 0)), (0, max(self.patch_w-cur_w, 0)), (0, 0))
+            depth_ = np.pad(depth_, to_pad)[:self.patch_h, :self.patch_w, :3]
+            depth_crop = depth_
             m = transform.rescale(fm_crop, (self.patch_h/h, self.patch_w/w))
             cur_h, cur_w = m.shape[:2]
             to_pad = ((0, max(self.patch_h-cur_h, 0)), (0, max(self.patch_w-cur_w, 0)))
@@ -221,6 +226,9 @@ class Fusion_OSD(torch.utils.data.Dataset):
             vm_crop_aug = torch.from_numpy(vm_crop_aug).to(self.dtype).to(self.device)
             img_crop = torch.from_numpy(img_crop).to(self.dtype).to(self.device)
             img = torch.from_numpy(img).to(self.dtype).to(self.device)
+            # 修改： 添加depth
+            depth_crop = torch.from_numpy(depth_crop).to(self.dtype).to(self.device)
+            depth = torch.from_numpy(depth).to(self.dtype).to(self.device)
             vm_no_crop = torch.from_numpy(np.array(vm_no_crop)).to(self.dtype).to(self.device)
             
             # loss_mask = torch.from_numpy(np.array(loss_mask)).to(self.dtype).to(self.device)
@@ -236,7 +244,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
                     # "fm_no_crop": fm_no_crop,
                     "fm_crop": fm_crop,
                     "img_crop": img_crop,
-                    
+                    "depth_crop": depth_crop,    # 修改： 添加depth
                     # "loss_mask": loss_mask,
                     "obj_position": obj_position,
                     "vm_pad": vm_pad,
@@ -259,6 +267,7 @@ class Fusion_OSD(torch.utils.data.Dataset):
                     "fm_crop": fm_crop,
                     "img_crop": img_crop,
                     # "loss_mask": loss_mask,
+                    "depth_crop": depth_crop,    # 修改： 添加depth
                     "obj_position": obj_position,
                     "vm_pad": vm_pad,
                     "vm_scale": vm_scale,

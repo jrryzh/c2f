@@ -3,6 +3,7 @@ from data.dataloader_MOViD_A import MOViD_A
 from data.dataloader_KINS import Kins_Fusion_dataset, KINS_Aisformer_VRSP_Intersection
 from data.dataloader_COCOA import COCOA_Fusion_dataset, COCOA_VRSP
 from data.dataloader_UOAIS import Fusion_UOAIS
+from data.dataloader_OSD import Fusion_OSD
 
 def load_dataset(config, args, mode):
     if mode=="train":
@@ -21,6 +22,9 @@ def load_dataset(config, args, mode):
         elif args.dataset=="UOAIS":
             train_dataset = Fusion_UOAIS(config, mode='train')
             test_dataset = Fusion_UOAIS(config, mode='test')
+        elif args.dataset=="OSD":
+            train_dataset = Fusion_OSD(config, mode='train')
+            test_dataset = Fusion_OSD(config, mode='test')
         return train_dataset, test_dataset 
     else:
         if args.dataset=="KINS":
@@ -33,4 +37,6 @@ def load_dataset(config, args, mode):
             test_dataset = MOViD_A(config, mode='test')
         elif args.dataset=="UOAIS":
             test_dataset = Fusion_UOAIS(config, mode='test')
+        elif args.dataset=="OSD":
+            test_dataset = Fusion_OSD(config, mode='test')
         return test_dataset
