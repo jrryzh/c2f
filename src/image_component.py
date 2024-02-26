@@ -9,6 +9,22 @@ from torchvision.models import resnet18, resnet50
 
 logger = logging.getLogger(__name__)
 
+# 修改： 增加rgbd的线性融合层
+class RGBDLinearFusion(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.linear = nn.Linear(in_channels * 2, in_channels)
+
+    def forward(self, rgb_features, depth_features):
+        # 假设rgb_features和depth_features都是最终的特征向量，且它们的维度相同
+        # 在特征维度上进行拼接
+        fused_features = torch.cat([rgb_features, depth_features], dim=1)
+        fused_features = fused_features.transpose(1,3)
+        # 通过线性层进行特征融合
+        fused_features = self.linear(fused_features)
+        fused_features = fused_features.transpose(3,1)
+        return fused_features
+
 # 修改： 增加depth到image和fusion_conv
 class RGBDFusionConv(nn.Module):
     def __init__(self, in_channels):

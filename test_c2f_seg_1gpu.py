@@ -31,6 +31,10 @@ if __name__ == '__main__':
             from src.image_model_depth_6channel import C2F_Seg
         elif args.model == "rgbd_fusion":
             from src.image_model_depth_fusion import C2F_Seg
+        elif args.model == "depth_only":
+            from src.image_model_depth import C2F_Seg
+        elif args.model == "rgbd_linearfusion":
+            from src.image_model_depth_linearfusion import C2F_Seg
     elif args.data_type == "video":
         from src.video_model import C2F_Seg
 
