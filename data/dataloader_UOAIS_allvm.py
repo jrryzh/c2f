@@ -13,6 +13,44 @@ import cv2
 import numpy as np
 import torch
 import imageio
+import pyfastnoisesimd as fns
+
+def perlin_noise(frequency, width, height):
+
+    noise = fns.Noise()
+    noise.NoiseType = 2 # perlin noise
+    noise.frequency = frequency
+    result = noise.genAsGrid(shape=[height, width], start=[0,0])
+    return result
+
+def PerlinDistortion(image, width, height):
+    """
+    """
+    # sample distortion parameters from noise vector
+    fx = np.random.uniform(0.0001, 0.1)
+    fy = np.random.uniform(0.0001, 0.1)
+    fz = np.random.uniform(0.01, 0.1)
+    wxy = np.random.uniform(0, 10)
+    wz = np.random.uniform(0, 0.005)
+    cnd_x = wxy * perlin_noise(fx, width, height)
+    cnd_y = wxy * perlin_noise(fy, width, height)
+    cnd_z = wz * perlin_noise(fz, width, height)
+
+    cnd_h = np.array(list(range(height)))
+    cnd_h = np.expand_dims(cnd_h, -1)
+    cnd_h = np.repeat(cnd_h, width, -1)
+    cnd_w = np.array(list(range(width)))
+    cnd_w = np.expand_dims(cnd_w, 0)
+    cnd_w = np.repeat(cnd_w, height, 0)
+
+    noise_cnd_h = np.int16(cnd_h + cnd_x)
+    noise_cnd_h = np.clip(noise_cnd_h, 0, (height - 1))
+    noise_cnd_w = np.int16(cnd_w + cnd_y)
+    noise_cnd_w = np.clip(noise_cnd_w, 0, (width - 1))
+
+    new_img = image[(noise_cnd_h, noise_cnd_w)]
+    new_img = new_img = new_img + cnd_z
+    return new_img.astype(np.float32)
 
 def normalize_depth(depth, min_val=250.0, max_val=1500.0):
     """ normalize the input depth (mm) and return depth image (0 ~ 255)
@@ -262,19 +300,30 @@ class Fusion_UOAIS_ALLVM(torch.utils.data.Dataset):
         # anno_id, img_path = self.label_info[index].split(",")
         img = cv2.imread(os.path.join(self.img_root_path, self.img_dict_list[index]["file_name"]), cv2.IMREAD_COLOR)
         height, width, _ = img.shape
-        depth = imageio.imread(os.path.join(self.img_root_path, self.img_dict_list[index]["depth_file_name"]))
-        if self.img_dict_list[index]["depth_file_name"].startswith("bin"):
-            depth = normalize_depth(depth, min_val=2000.0, max_val=13000.0)
-        elif self.img_dict_list[index]["depth_file_name"].startswith("tabletop"):
-            peak1, peak2, mean = 5000.0, 20000.0, np.mean(depth) 
-            if abs(peak1 - mean) < abs(peak2 - mean):   # 属于左峰
-                depth = normalize_depth(depth, min_val=0.0, max_val=25000.0)
-            else:                                       # 属于右峰
-                depth = normalize_depth(depth, min_val=0.0, max_val=25000.0)
-        else:
-            raise Exception("wrong name in depth file")
-        depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_NEAREST)
-        depth = inpaint_depth(depth)
+        # depth = imageio.imread(os.path.join(self.img_root_path, self.img_dict_list[index]["depth_file_name"]))
+        # if self.img_dict_list[index]["depth_file_name"].startswith("bin"):
+        #     depth = normalize_depth(depth, min_val=2000.0, max_val=13000.0)
+        # elif self.img_dict_list[index]["depth_file_name"].startswith("tabletop"):
+        #     peak1, peak2, mean = 5000.0, 20000.0, np.mean(depth) 
+        #     if abs(peak1 - mean) < abs(peak2 - mean):   # 属于左峰
+        #         depth = normalize_depth(depth, min_val=0.0, max_val=25000.0)
+        #     else:                                       # 属于右峰
+        #         depth = normalize_depth(depth, min_val=0.0, max_val=25000.0)
+        # else:
+        #     raise Exception("wrong name in depth file")
+        # depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_NEAREST)
+        # depth = inpaint_depth(depth)
+        # 修改：处理depth
+        depth = imageio.imread(os.path.join(self.img_root_path, self.img_dict_list[index]["depth_file_name"])).astype(np.float32)
+        if self.mode == "train":
+            # if random.random() > 0.5:
+            depth = PerlinDistortion(depth, *self.img_size)
+            # depth = PerlinDistortion(depth, depth.shape[1], depth.shape[0])
+        depth[depth > self.depth_max] = self.depth_max
+        depth[depth < self.depth_min] = self.depth_min
+        depth = (depth - self.depth_min) / (self.depth_max - self.depth_min) * 255
+        depth = np.expand_dims(depth, -1)
+        depth = np.uint8(np.repeat(depth, 3, -1))
 
         ann = self.anns_dict_list[index]
         anno_id = ann["id"]

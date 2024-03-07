@@ -10,7 +10,6 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node
 CUDA_VISIBLE_DEVICES=0 python train_c2f_seg_1gpu.py --dataset UOAIS --batch 32 --data_type image --path UOAIS_c2f_seg --model original
 
 # test original
-CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS --batch 32 --data_type image --path UOAIS_c2f_seg --model original
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg --model original
 # allvm
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS_ALLVM --batch 32 --data_type image --path UOAIS_c2f_seg --model original
@@ -57,3 +56,9 @@ CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD --batch 16 --da
 # allvm
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS_ALLVM --batch 32 --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD_ALLVM --batch 32 --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion
+
+
+## eval metrics
+CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg --model original
+CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
+CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion
