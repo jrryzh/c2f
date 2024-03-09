@@ -17,7 +17,7 @@ CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD_ALLVM --batch 3
 
 
 # train depth_only
-CUDA_VISIBLE_DEVICES=0 python train_c2f_seg_1gpu.py --dataset UOAIS --batch 16 --data_type image --path UOAIS_c2f_seg_depth --model depth_only
+CUDA_VISIBLE_DEVICES=0 python train_c2f_seg_1gpu.py --dataset UOAIS --batch 32 --data_type image --path UOAIS_c2f_seg_depth --model depth_only
 
 # test depth_only
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS --batch 16 --data_type image --path UOAIS_c2f_seg_depth --model depth_only
@@ -27,11 +27,12 @@ CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS_ALLVM --batch
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD_ALLVM --batch 32 --data_type image --path UOAIS_c2f_seg_depth --model depth_only
 
 # train depth_6channel
-CUDA_VISIBLE_DEVICES=0 python train_c2f_seg_1gpu.py --dataset UOAIS --batch 16 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
+CUDA_VISIBLE_DEVICES=0 python train_c2f_seg_1gpu.py --dataset UOAIS --batch 32 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 python -m torch.distributed.launch --nproc_per_node=7 train_c2f_seg.py --dataset UOAIS --batch 16 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
 
 # test depth_6channel
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS --batch 16 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
+CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD --batch 16 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
 # allvm
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset UOAIS_ALLVM --batch 32 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD_ALLVM --batch 32 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
@@ -62,3 +63,5 @@ CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu.py --dataset OSD_ALLVM --batch 3
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg --model original
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion
+
+CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics_uoaisvm.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion

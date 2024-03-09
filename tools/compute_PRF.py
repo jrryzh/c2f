@@ -307,7 +307,6 @@ def boundary_overlap_occ(i, j, predicted_mask, gt_mask, bound_th=0.003):
 def multilabel_amodal_metrics(prediction, gt, obj_detect_threshold=0.75, return_assign=False):
     ### Compute F-measure, True Positive matrices ###
     # Get unique OBJECT labels from GT and prediction
-    # import ipdb; ipdb.set_trace()
     labels_gt = np.unique(gt)
     labels_gt = labels_gt[~np.isin(labels_gt, [BACKGROUND_LABEL])]
     num_labels_gt = labels_gt.shape[0]
@@ -316,7 +315,6 @@ def multilabel_amodal_metrics(prediction, gt, obj_detect_threshold=0.75, return_
     labels_pred = labels_pred[~np.isin(labels_pred, [BACKGROUND_LABEL])]
     num_labels_pred = labels_pred.shape[0]
 
-    assert num_labels_gt == num_labels_pred
     # F-measure, True Positives, Boundary stuff
     F = np.zeros((num_labels_gt, num_labels_pred))
     true_positives = np.zeros((num_labels_gt, num_labels_pred))

@@ -102,13 +102,13 @@ class Fusion_OSD_ALLVM(torch.utils.data.Dataset):
         self.rgb_paths = sorted(glob.glob("{}/image_color/*.png".format(self.dataset_path)))
         self.depth_paths = sorted(glob.glob("{}/disparity/*.png".format(self.dataset_path)))
         # can get occluded mask from annotation
-        self.anno_paths = sorted(glob.glob("{}/annotation/*.png".format(self.dataset_path)))
-        self.amodal_anno_paths = sorted(glob.glob("{}/amodal_annotation/*.png".format(self.dataset_path)))
-        self.occlusion_anno_paths = sorted(glob.glob("{}/occlusion_annotation/*.png".format(self.dataset_path)))
+        self.anno_paths = sorted(glob.glob("{}/annotation/*.png".format(self.dataset_path))) # 111
+        self.amodal_anno_paths = sorted(glob.glob("{}/amodal_annotation/*.png".format(self.dataset_path))) # 472
+        self.occlusion_anno_paths = sorted(glob.glob("{}/occlusion_annotation/*.png".format(self.dataset_path))) # 237
 
         # 修改：添加计算好的vm 列表
         with open('/cpfs/2926428ee2463e44/user/zjy/data/OSD-0.2-depth/best_vm_matches_uoais.pkl', 'rb') as f:
-            self.best_vm_matches = pickle.load(f)
+            self.best_vm_matches = pickle.load(f)   # 472
             
         self.dtype = torch.float32
         self.enlarge_coef = 2

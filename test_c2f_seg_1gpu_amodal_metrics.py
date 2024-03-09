@@ -1,3 +1,9 @@
+"""
+用于计算uoais文章中的amodal metrics
+存在两个问题 1. h, w存在冗余 2. num_inst_all_gt 设置成global 3. dataload 方式可以改进
+运行不存在问题 后续需要改进
+"""
+
 import os
 import cv2
 import time
@@ -11,20 +17,13 @@ from torch.utils.data import DataLoader
 from data.dataloader_transformer import load_dataset
 from utils.logger import setup_logger
 from utils.utils import Config, to_cuda
-import os
-import cv2
-import random
-import numpy as np
 import cvbase as cvb
 from PIL import Image
 from skimage import transform
-import torch
-from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import pycocotools.mask as mask_utils
 import matplotlib.pyplot as plt
 import glob
-import torch
 import imageio
 from termcolor import colored
 from tools import compute_PRF
@@ -401,7 +400,8 @@ if __name__ == '__main__':
         num_inst_mat += len(assignments)
 
         amodals = pred_fm_lst
-        visibles = vms  
+        # visibles = vms 
+        visibles = pred_vm_lst 
         
         # count occluded area of predictions when classified
         all_occ_pred, all_bou_pred = 0, 0
@@ -410,6 +410,7 @@ if __name__ == '__main__':
             idx = int(pred.max())-1
             amodal = amodals[idx]
             visible = visibles[idx]
+            import ipdb; ipdb.set_trace()
             occ = np.bitwise_xor(amodal, visible)
             try:
                 cls = instances.pred_occlusions[idx].item()
