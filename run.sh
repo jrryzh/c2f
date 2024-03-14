@@ -67,3 +67,6 @@ CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics_uoaisvm.py --data
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics_uoaisvm.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_depth --model depth_only
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics_uoaisvm.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_6channel --model rgbd_6channel
 CUDA_VISIBLE_DEVICES=0 python test_c2f_seg_1gpu_amodal_metrics_uoaisvm.py --dataset OSD --batch 32 --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion
+
+## inference
+CUDA_VISIBLE_DEVICES=0 python inference/inference.py --data_type image --path UOAIS_c2f_seg_linearfusion --model rgbd_linearfusion
