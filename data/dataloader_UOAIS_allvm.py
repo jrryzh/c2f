@@ -288,6 +288,9 @@ class Fusion_UOAIS_ALLVM(torch.utils.data.Dataset):
         self.patch_h = 256
         self.patch_w = 256
         self.device = "cpu"
+        
+        self.img_size = (640, 480)
+        self.depth_min, self.depth_max = [2500, 15000]
 
         
     def __len__(self):

@@ -130,6 +130,7 @@ class C2F_Seg(nn.Module):
         fusion_feat.append(self.rgbd_linearfuse_512(img_feat[1], depth_feat[1]))
         fusion_feat.append(self.rgbd_linearfuse_1024(img_feat[2], depth_feat[2]))
         fusion_feat.append(self.rgbd_linearfuse_2048(img_feat[3], depth_feat[3]))
+        import ipdb; ipdb.set_trace()
 
         # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
         pred_fm_crop_old = meta["vm_crop_gt"]
@@ -226,6 +227,7 @@ class C2F_Seg(nn.Module):
             fusion_feat.append(self.rgbd_linearfuse_512(img_feat[1], depth_feat[1]))
             fusion_feat.append(self.rgbd_linearfuse_1024(img_feat[2], depth_feat[2]))
             fusion_feat.append(self.rgbd_linearfuse_2048(img_feat[3], depth_feat[3]))
+            import ipdb; ipdb.set_trace()
 
             # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
             pred_fm_crop_old = meta["vm_crop_gt"]

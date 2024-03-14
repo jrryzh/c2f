@@ -162,7 +162,7 @@ class Fusion_OSD_ALLVM(torch.utils.data.Dataset):
 
         if np.sum(vm_no_crop)==0:
             counts = np.array([0])
-            print("DEBUG: all zeors: ",anno_file)
+            print("DEBUG: all zeors: ",anno_file) # test62_1.png
             return dict()
         else:
             counts = np.array([1])

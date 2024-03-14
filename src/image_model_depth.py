@@ -192,11 +192,11 @@ class C2F_Seg(nn.Module):
     def calculate_metrics(self, meta_lst):
         pred_vm_lst, pred_fm_lst = [], []
         for meta in meta_lst:
-            img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
+            depth_feat = self.depth_encoder(meta['depth_crop'].permute((0,3,1,2)).to(torch.float32))
             
             # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
             pred_fm_crop_old = meta["vm_crop_gt"]
-            pred_vm_crop, pred_fm_crop = self.refine_module(img_feat, pred_fm_crop_old)
+            pred_vm_crop, pred_fm_crop = self.refine_module(depth_feat, pred_fm_crop_old)
 
             pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
             pred_vm_crop = torch.sigmoid(pred_vm_crop)
