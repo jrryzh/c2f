@@ -295,7 +295,10 @@ def torch_show_all_params(model):
 def to_cuda(meta, device):
     for k in meta:
         if  meta[k] is not None:
-            meta[k] = meta[k].to(device)
+            try:
+                meta[k] = meta[k].to(device)
+            except:
+                import ipdb; ipdb.set_trace()
     return meta
 
 

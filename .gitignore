@@ -50,3 +50,10 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# extra
+inference/grounded_sam_output
+inference/lacnet_output
+inference/one_head
+inference/two_head
+inference/c2f_reference_input.zip

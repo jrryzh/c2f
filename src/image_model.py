@@ -229,6 +229,8 @@ class C2F_Seg(nn.Module):
         :param mask: [1,1,H,W] mask
         '''
         self.sample_iter += 1
+        
+        import ipdb;ipdb.set_trace()
 
         img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
         
@@ -351,5 +353,40 @@ class C2F_Seg(nn.Module):
             'refine': self.refine_module.state_dict(),
             'opt': self.opt.state_dict(),
         }, save_path)
+        
+    @torch.no_grad()
+    def inference(self, meta):
+        '''
+        :param x:[B,3,H,W] image
+        :param c:[b,X,H,W] condition
+        :param mask: [1,1,H,W] mask
+        '''
+        self.sample_iter += 1
+
+        img_feat = self.img_encoder(meta['img_crop'].permute((0,3,1,2)).to(torch.float32))
+        
+        # 修改： 将原来的transformer预测的coarse mask改为vm_crop_gt
+        pred_fm_crop_old = meta["vm_crop_gt"]
+        pred_vm_crop, pred_fm_crop = self.refine_module(img_feat, pred_fm_crop_old)
+
+        pred_vm_crop = F.interpolate(pred_vm_crop, size=(256, 256), mode="nearest")
+        pred_vm_crop = torch.sigmoid(pred_vm_crop)
+        loss_vm = self.refine_criterion(pred_vm_crop, meta['vm_crop_gt'])
+        # pred_vm_crop = (pred_vm_crop>=0.5).to(torch.float32)
+
+        pred_fm_crop = F.interpolate(pred_fm_crop, size=(256, 256), mode="nearest")
+        pred_fm_crop = torch.sigmoid(pred_fm_crop)
+
+        pred_vm = self.align_raw_size(pred_vm_crop, meta['obj_position'], meta["vm_pad"], meta)
+        pred_fm = self.align_raw_size(pred_fm_crop, meta['obj_position'], meta["vm_pad"], meta)
+        
+        # import ipdb; ipdb.set_trace()
+        pred_fm = pred_fm.squeeze()
+        pred_vm = pred_vm.squeeze()
+        pred_fm = (pred_fm > 0.5).to(torch.int64)
+        pred_vm = (pred_vm > 0.5).to(torch.int64)
+
+        return pred_vm, pred_fm
+
 
         

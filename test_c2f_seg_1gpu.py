@@ -70,7 +70,8 @@ if __name__ == '__main__':
     test_loader = DataLoader(
         dataset=test_dataset,
         batch_size=config.batch_size,
-        num_workers=config.test_num_workers,
+        # num_workers=config.test_num_workers,
+        num_workers=0,
         drop_last=True
     )
 

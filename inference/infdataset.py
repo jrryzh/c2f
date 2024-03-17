@@ -120,14 +120,13 @@ def array_to_tensor(array):
 
     return tensor
 
-def inf_dataloader(img_root_path, depth_root_path, visible_mask_root, enlarge_coef=2, patch_h=256, patch_w=256, dtype=torch.float32, device="cpu"):
+def inf_dataloader(img_path, depth_path, visible_mask_path, enlarge_coef=2, patch_h=256, patch_w=256, dtype=torch.float32, device="cpu"):
     # 所有需要的输入
     # image, depth, visible_mask, amodal_mask(假的或不给)，bbox
-
-    img = cv2.imread(img_root_path, cv2.IMREAD_COLOR)
+    img = cv2.imread(img_path, cv2.IMREAD_COLOR)
     height, width, _ = img.shape
 
-    depth = imageio.imread(depth_root_path).astype(np.float32)
+    depth = imageio.imread(depth_path).astype(np.float32)
     depth_min, depth_max = [depth.min(), depth.max()]
     depth[depth > depth_max] = depth_max
     depth[depth < depth_min] = depth_min
@@ -139,19 +138,19 @@ def inf_dataloader(img_root_path, depth_root_path, visible_mask_root, enlarge_co
     img_id = 0
     category_id = 1
 
-    full_mask = ann["segmentation"]
-    fm_no_crop = mask_utils.decode(full_mask)[...,np.newaxis]
+    # visible_mask = ann["visible_mask"]
+    # vm_no_crop = mask_utils.decode(visible_mask)[...,np.newaxis]
+    # 在这里想办法读入visible mask
+    # todo
+    vm_no_crop = imageio.imread(visible_mask_path)
+    vm_no_crop = vm_no_crop > 0
 
-    fm_no_crop_gt = fm_no_crop
-
-    visible_mask = ann["visible_mask"]
-    vm_no_crop = mask_utils.decode(visible_mask)[...,np.newaxis]
-
-    vm_no_crop_gt = vm_no_crop
-
-    y_min, x_min, w, h = ann["bbox"]
-    y_max, x_max = y_min + w, x_min + h
-    y_min, x_min, y_max, x_max = int(y_min), int(x_min), int(y_max), int(x_max) 
+    rows, cols = np.where(vm_no_crop)
+    x_min, x_max = np.min(rows), np.max(rows)
+    y_min, y_max = np.min(cols), np.max(cols)
+    # y_max, x_max = y_min + w, x_min + h
+    # y_min, x_min, y_max, x_max = int(y_min), int(x_min), int(y_max), int(x_max) 
+    
 
     x_center = (x_min + x_max) // 2
     y_center = (y_min + y_max) // 2
@@ -162,8 +161,7 @@ def inf_dataloader(img_root_path, depth_root_path, visible_mask_root, enlarge_co
     y_min = max(0, y_center - y_len // 2)
     y_max = min(width, y_center + y_len // 2)
     
-    fm_crop = fm_no_crop[x_min:x_max+1, y_min:y_max+1, 0].astype(bool)
-    vm_crop = vm_no_crop[x_min:x_max+1, y_min:y_max+1, 0].astype(bool)
+    vm_crop = vm_no_crop[x_min:x_max+1, y_min:y_max+1].astype(bool)
     img_crop = img[x_min:x_max+1, y_min:y_max+1]
     depth_crop = depth[x_min:x_max+1, y_min:y_max+1]
 
@@ -187,37 +185,19 @@ def inf_dataloader(img_root_path, depth_root_path, visible_mask_root, enlarge_co
     depth_ = np.pad(depth_, to_pad)[:patch_h, :patch_w, :3]
     depth_crop = depth_
 
-    m = transform.rescale(fm_crop, (patch_h/h, patch_w/w))
-    cur_h, cur_w = m.shape[:2]
-    to_pad = ((0, max(patch_h-cur_h, 0)), (0, max(patch_w-cur_w, 0)))
-    m = np.pad(m, to_pad)[:patch_h, :patch_w]    
-    fm_crop = m[np.newaxis, ...]
-
     obj_position = np.array([x_min, x_max, y_min, y_max])
     vm_pad = np.array([max(patch_h-cur_h, 0), max(patch_w-cur_w, 0)])
     vm_scale = np.array([patch_h/h, patch_w/w])
 
-    # full_pad = ((0, max(375-height, 0)), (0, max(1242-width, 0)))
-    # vm_no_crop = np.pad(vm_no_crop, full_pad)[:375, :1242]
-    # fm_no_crop = np.pad(fm_no_crop, full_pad)[:375, :1242]
     vm_no_crop = vm_no_crop[np.newaxis, ...]
-    fm_no_crop = fm_no_crop[np.newaxis, ...]
 
-    loss_mask = fm_no_crop-vm_no_crop
-    loss_mask[loss_mask==255]=0
-    loss_mask = 1-loss_mask.astype(bool)
     # data augmentation
     vm_crop_aug = data_augmentation(vm_crop[0])[np.newaxis, ...]
-    
-    counts = np.array([1])
-    counts = torch.from_numpy(counts).to(dtype).to(device)
 
     obj_position = torch.from_numpy(obj_position).to(dtype).to(device)
     vm_pad = torch.from_numpy(vm_pad).to(dtype).to(device)
     vm_scale = torch.from_numpy(vm_scale).to(dtype).to(device)
 
-    fm_crop = torch.from_numpy(fm_crop).to(dtype).to(device)
-    fm_no_crop = torch.from_numpy(np.array(fm_no_crop)).to(dtype).to(device)
     vm_crop = torch.from_numpy(vm_crop).to(dtype).to(device)
     vm_crop_aug = torch.from_numpy(vm_crop_aug).to(dtype).to(device)
     img_crop = torch.from_numpy(img_crop).to(dtype).to(device)
@@ -227,35 +207,25 @@ def inf_dataloader(img_root_path, depth_root_path, visible_mask_root, enlarge_co
     depth = torch.from_numpy(depth).to(dtype).to(device)
     vm_no_crop = torch.from_numpy(np.array(vm_no_crop)).to(dtype).to(device)
     
-    loss_mask = torch.from_numpy(np.array(loss_mask)).to(dtype).to(device)
-
     img_id = torch.from_numpy(np.array(img_id)).to(dtype).to(device)
     anno_id = torch.from_numpy(np.array(anno_id)).to(dtype).to(device)
     category_id = torch.from_numpy(np.array(category_id)).to(dtype).to(device)
 
     meta = {
-        "vm_no_crop": vm_no_crop,
-        "vm_crop": vm_crop,
-        "vm_crop_gt": vm_crop,
-        "fm_no_crop": fm_no_crop,
-        "fm_crop": fm_crop,
-        "img_crop": img_crop,
-        "depth_crop": depth_crop,    # 修改： 添加depth  
-        "loss_mask": loss_mask,
-        "obj_position": obj_position,
-        "vm_pad": vm_pad,
-        "vm_scale": vm_scale,
-        "counts":counts,
-        "img_id": img_id,
-        "anno_id": anno_id,
-        "category_id": category_id,
+        "vm_crop": vm_crop.unsqueeze(0), # torch.Size([1, 256, 256])
+        "vm_crop_gt": vm_crop.unsqueeze(0), # torch.Size([1, 256, 256])
+        "img_crop": img_crop.unsqueeze(0), # torch.Size([256, 256, 3])
+        "depth_crop": depth_crop.unsqueeze(0),    # torch.Size([256, 256, 3])
+        "obj_position": obj_position.unsqueeze(0), # torch.Size([4])
+        "vm_pad": vm_pad.unsqueeze(0), # torch.Size([2])
+        "vm_no_crop": vm_no_crop.unsqueeze(-1).unsqueeze(0) # torch.Size([1, 480, 640, 1])
         # for vq
         # "mask_crop": fm_crop
-        "img_no_crop": img,
-        "depth_no_crop": depth, # 修改： 添加depth
-        "fm_no_crop_gt" : fm_no_crop_gt,
-        "vm_no_crop_gt" : vm_no_crop_gt
+        # "img_no_crop": img,
+        # "depth_no_crop": depth, # 修改： 添加depth
+        # "vm_no_crop_gt" : vm_no_crop_gt
     }
+
     return meta
     
 @staticmethod
